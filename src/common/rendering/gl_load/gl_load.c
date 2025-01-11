@@ -135,6 +135,26 @@ static PROC WinGetProcAddress(const char *name)
 		#define IntGetProcAddress(name) AppleGLGetProcAddress(name)
 	#else
 		#if defined(__sgi) || defined(__sun) || defined(__unix__) || defined(__HAIKU__)
+#ifdef __ANDROID__ //karin: using EGL on Android
+			#include <EGL/egl.h>
+static intptr_t glesFunctionStub()
+{
+	printf("call OpenGL stub function!\n");
+	fprintf(stderr, "call OpenGL stub function!\n");
+	return 0;
+}
+static void *dbgeglGetProcAddress(const char *name)
+{
+	void *ptr = eglGetProcAddress(name);
+	if(!ptr)
+	{
+		printf("%s -> missing\n", name);
+		ptr = &glesFunctionStub;
+	}
+	return ptr;
+}
+			#define IntGetProcAddress(name) dbgeglGetProcAddress((const char *)name)
+#else
 			void* SDL_GL_GetProcAddress(const char* proc);
 			#define IntGetProcAddress(name) SDL_GL_GetProcAddress((const char*)name)
 			//#define IntGetProcAddress(name) PosixGetProcAddress((const GLubyte*)name)

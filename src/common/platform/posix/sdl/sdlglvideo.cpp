@@ -55,8 +55,14 @@
 #include "gles_framebuffer.h"
 #endif
 
+#if ANDROID
+int harm_gl_version;
+int harm_gl_es;
+#endif
+
 #ifdef HAVE_VULKAN
 #include "vulkan/system/vk_renderdevice.h"
+#include "gles_system.h"
 #include <zvulkan/vulkanbuilders.h>
 #include <zvulkan/vulkandevice.h>
 #include <zvulkan/vulkaninstance.h>
@@ -248,11 +254,24 @@ namespace Priv
 #else
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
         if (gl_es) {
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+            if (USING_GLES_2) {
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+            } else if (USING_GLES_3) {
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+            } else {
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+            }
         } else {
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+            if (USING_GLES_3) {
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+            } else {
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+            }
         }
 #endif
 	}
@@ -754,4 +773,54 @@ void I_SetWindowTitle(const char* caption)
 		SDL_SetWindowTitle(Priv::window, default_caption.GetChars());
 	}
 }
+
+#if ANDROID
+float GLimp_GetGLSLVersion(void)
+{
+    if (V_GetBackend() == 0)
+        return 3.20f;
+    else
+    {
+        if(USING_GLES_2)
+            return 1.00f;
+        else if(USING_GLES_3)
+            return 3.00f;
+        else if(USING_GLES_32)
+            return 3.20f;
+        else
+            return 1.00f; // 3.00f
+    }
+}
+
+float GLimp_GetGLVersion(void)
+{
+    if (V_GetBackend() == 0)
+    {
+        int glVersion = harm_gl_version;
+        if (glVersion <= 0)
+            return 4.5f; // 4.2f;
+        else if(glVersion == 330)
+            return 3.3f;
+        else if(glVersion == 420)
+            return 4.2f;
+        else if(glVersion == 430)
+            return 4.3f;
+        else if(glVersion == 450)
+            return 4.5f;
+        else
+            return float(glVersion) / 100.0f;
+    }
+    else
+    {
+        if(USING_GLES_2)
+            return 2.0f;
+        else if(USING_GLES_3)
+            return 3.2f;
+        else if(USING_GLES_32)
+            return 3.2f;
+        else
+            return 3.0f;
+    }
+}
+#endif
 

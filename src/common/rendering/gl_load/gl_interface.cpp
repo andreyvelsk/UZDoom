@@ -117,7 +117,13 @@ void gl_LoadExtensions()
 
 	const char *version = Args->CheckValue("-glversion");
 	realglversion = strtod(glversion, NULL);
-
+#ifdef __ANDROID__ //karin: force GL version
+	extern float GLimp_GetGLVersion(void);
+	realglversion = GLimp_GetGLVersion();
+	FString glversionStr;
+	glversionStr.AppendFormat("%f", realglversion);
+	glversion = glversionStr.GetChars();
+#endif
 
 	if (version == NULL)
 	{
