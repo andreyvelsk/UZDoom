@@ -64,7 +64,9 @@ public:
 	{
 		if(Device != NULL)
 			M_SaveJoystickConfig(this);
+#ifndef ANDROID //crashes
 		SDL_JoystickClose(Device);
+#endif
 	}
 
 	bool IsValid() const

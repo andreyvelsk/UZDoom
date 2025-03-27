@@ -247,8 +247,13 @@ namespace Priv
 		}
 #else
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        if (gl_es) {
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        } else {
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+        }
 #endif
 	}
 }
@@ -462,17 +467,12 @@ DFrameBuffer *SDLVideo::CreateFrameBuffer ()
 
 	if (fb == nullptr)
 	{
-#ifndef ANDROID
 #ifdef HAVE_GLES2
 		if (V_GetBackend() != 0)
-			fb = new OpenGLESRenderer::OpenGLFrameBuffer(0, vid_fullscreen);
+			fb = new OpenGLESRenderer::OpenGLFrameBuffer(0, true);
 		else
 #endif
-			fb = new OpenGLRenderer::OpenGLFrameBuffer(0, vid_fullscreen);
-#else
-        gl_es = true;
-        fb = new OpenGLESRenderer::OpenGLFrameBuffer(0, true);
-#endif
+			fb = new OpenGLRenderer::OpenGLFrameBuffer(0, true);
 	}
 
 	return fb;

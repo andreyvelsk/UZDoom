@@ -1104,6 +1104,10 @@ SoundHandle OpenALSoundRenderer::LoadSoundRaw(uint8_t *sfxdata, int length, int 
 
 SoundHandle OpenALSoundRenderer::LoadSound(uint8_t *sfxdata, int length, int def_loop_start, int def_loop_end)
 {
+#ifdef ANDROID // 3D sounds are very loud without making the sound mono. This needs to be fixed because it is making all sounds mono for now..
+	bool monoize = true;
+#endif
+
 	SoundHandle retval = { NULL };
 	ALenum format = AL_NONE;
 	ChannelConfig chans;
@@ -1128,7 +1132,11 @@ SoundHandle OpenALSoundRenderer::LoadSound(uint8_t *sfxdata, int length, int def
 
 	SoundDecoder_GetInfo(decoder, &srate, &chans, &type);
 	int samplesize = 1;
+#ifdef ANDROID
+	if (chans == ChannelConfig_Mono || monoize)
+#else
 	if (chans == ChannelConfig_Mono)
+#endif
 	{
 		if (type == SampleType_UInt8) format = AL_FORMAT_MONO8, samplesize = 1;
 		if (type == SampleType_Int16) format = AL_FORMAT_MONO16, samplesize = 2;
@@ -1163,6 +1171,38 @@ SoundHandle OpenALSoundRenderer::LoadSound(uint8_t *sfxdata, int length, int def
 		return retval;
 	}
 	SoundDecoder_Close(decoder);
+
+#ifdef ANDROID
+	if(chans != ChannelConfig_Mono && monoize)
+	{
+		size_t chancount = GetChannelCount(chans);
+		size_t frames = data.size() / chancount /
+						(type == SampleType_Int16 ? 2 : 1);
+		if(type == SampleType_Int16)
+		{
+			short *sfxdata = (short*)&data[0];
+			for(size_t i = 0;i < frames;i++)
+			{
+				int sum = 0;
+				for(size_t c = 0;c < chancount;c++)
+					sum += sfxdata[i*chancount + c];
+				sfxdata[i] = short(sum / chancount);
+			}
+		}
+		else if(type == SampleType_UInt8)
+		{
+			uint8_t *sfxdata = (uint8_t*)&data[0];
+			for(size_t i = 0;i < frames;i++)
+			{
+				int sum = 0;
+				for(size_t c = 0;c < chancount;c++)
+					sum += sfxdata[i*chancount + c] - 128;
+				sfxdata[i] = uint8_t((sum / chancount) + 128);
+			}
+		}
+		data.resize((data.size()/chancount));
+	}
+#endif
 
 	ALenum err;
 	ALuint buffer = 0;

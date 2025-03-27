@@ -183,6 +183,10 @@ void I_SetMouseCapture()
 	// Clear out any mouse movement.
 	SDL_GetRelativeMouseState (NULL, NULL);
 	SDL_SetRelativeMouseMode (SDL_TRUE);
+#ifdef ANDROID
+	// Need to clear this again because setting mode above adds relative values
+	SDL_GetRelativeMouseState (NULL, NULL);
+#endif
 }
 
 void I_ReleaseMouseCapture()
