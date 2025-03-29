@@ -557,9 +557,6 @@ class OptionMenuItemControlBase : OptionMenuItem
 	{
 		Menu.MenuSound("menu/choose");
 		mWaiting = true;
-        // ANDROID
-        mBindings.UnbindACommand(mAction); //Only allow one button to be bound to avoid confusion
-        //
 		let input = new("EnterKey");
 		input.Init(Menu.GetCurrentMenu(), self);
 		input.ActivateMenu();
