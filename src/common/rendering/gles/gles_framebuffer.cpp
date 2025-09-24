@@ -31,7 +31,7 @@
 ** THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **---------------------------------------------------------------------------
 **
-*/ 
+*/
 
 #include "gles_system.h"
 #include "v_video.h"
@@ -79,8 +79,8 @@ namespace OpenGLESRenderer
 //
 //==========================================================================
 
-OpenGLFrameBuffer::OpenGLFrameBuffer(void *hMonitor, bool fullscreen) : 
-	Super(hMonitor, fullscreen) 
+OpenGLFrameBuffer::OpenGLFrameBuffer(void *hMonitor, bool fullscreen) :
+	Super(hMonitor, fullscreen)
 {
 	// SetVSync needs to be at the very top to workaround a bug in Nvidia's OpenGL driver.
 	// If wglSwapIntervalEXT is called after glBindFramebuffer in a frame the setting is not changed!
@@ -180,7 +180,18 @@ void OpenGLFrameBuffer::Update()
 	Swap();
 	Super::Update();
 }
+#ifdef ANDROID
+uint8_t * gles_convertRGB(uint8_t* src, uint8_t * dst, int width, int height)
+{
+	for (int i=0; i<width*height; i++) {
+		for (int j=0; j<3; j++)
+			*(dst++) = *(src++);
+		src++;
+	}
 
+	return dst;
+}
+#endif
 void OpenGLFrameBuffer::CopyScreenToBuffer(int width, int height, uint8_t* scr)
 {
 	IntRect bounds;
@@ -192,7 +203,14 @@ void OpenGLFrameBuffer::CopyScreenToBuffer(int width, int height, uint8_t* scr)
 
 	// strictly speaking not needed as the glReadPixels should block until the scene is rendered, but this is to safeguard against shitty drivers
 	glFinish();
+#ifdef ANDROID
+	uint8_t* tmp = (uint8_t *)M_Malloc(width * height * 4);
+	glReadPixels(0, 0, width, height, GL_RGBA,GL_UNSIGNED_BYTE, tmp);
+	gles_convertRGB( tmp, scr, width, height);
+	M_Free(tmp);
+#else
 	glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, scr);
+#endif
 }
 
 //===========================================================================
@@ -220,11 +238,11 @@ void OpenGLFrameBuffer::RenderTextureView(FCanvasTexture* tex, std::function<voi
 
 //===========================================================================
 //
-// 
+//
 //
 //===========================================================================
 
-const char* OpenGLFrameBuffer::DeviceName() const 
+const char* OpenGLFrameBuffer::DeviceName() const
 {
 	return gles.modelstring;
 }
@@ -251,6 +269,10 @@ void OpenGLFrameBuffer::Swap()
 	mVertexData->WaitSync();
 
 	RenderState()->SetVertexBuffer(screen->mVertexData); // Needed for Raze because it does not reset it
+
+#ifdef ANDROID
+	GLRenderer->mShaderManager->SetActiveShader(nullptr);
+#endif
 
 	Finish.Unclock();
 	camtexcount = 0;
@@ -279,8 +301,8 @@ void OpenGLFrameBuffer::SetTextureFilterMode()
 	if (GLRenderer != nullptr && GLRenderer->mSamplerManager != nullptr) GLRenderer->mSamplerManager->SetTextureFilterMode();
 }
 
-IHardwareTexture *OpenGLFrameBuffer::CreateHardwareTexture(int numchannels) 
-{ 
+IHardwareTexture *OpenGLFrameBuffer::CreateHardwareTexture(int numchannels)
+{
 	return new FHardwareTexture(numchannels);
 }
 
@@ -300,19 +322,19 @@ void OpenGLFrameBuffer::PrecacheMaterial(FMaterial *mat, int translation)
 			systex->BindOrCreate(layer->layerTexture, i, CLAMP_NONE, 0, layer->scaleFlags);
 		}
 	}
-	// unbind everything. 
+	// unbind everything.
 	FHardwareTexture::UnbindAll();
 	gl_RenderState.ClearLastMaterial();
 }
 
 IVertexBuffer *OpenGLFrameBuffer::CreateVertexBuffer()
-{ 
-	return new GLVertexBuffer; 
+{
+	return new GLVertexBuffer;
 }
 
 IIndexBuffer *OpenGLFrameBuffer::CreateIndexBuffer()
-{ 
-	return new GLIndexBuffer; 
+{
+	return new GLIndexBuffer;
 }
 
 IDataBuffer *OpenGLFrameBuffer::CreateDataBuffer(int bindingpoint, bool ssbo, bool needsresize)
@@ -365,7 +387,7 @@ void OpenGLFrameBuffer::WaitForCommands(bool finish)
 
 //===========================================================================
 //
-// 
+//
 //
 //===========================================================================
 
@@ -378,7 +400,7 @@ void OpenGLFrameBuffer::BeginFrame()
 }
 
 //===========================================================================
-// 
+//
 //	Takes a screenshot
 //
 //===========================================================================
@@ -430,7 +452,7 @@ TArray<uint8_t> OpenGLFrameBuffer::GetScreenshotBuffer(int &pitch, ESSType &colo
 }
 
 //===========================================================================
-// 
+//
 // 2D drawing
 //
 //===========================================================================

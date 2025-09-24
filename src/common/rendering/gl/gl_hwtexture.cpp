@@ -61,14 +61,14 @@ TexFilter_s TexFilter[] = {
 };
 
 //===========================================================================
-// 
+//
 //	Static texture data
 //
 //===========================================================================
 unsigned int FHardwareTexture::lastbound[FHardwareTexture::MAX_TEXTURES];
 
 //===========================================================================
-// 
+//
 //	Loads the texture image into the hardware
 //
 // NOTE: For some strange reason I was unable to find the source buffer
@@ -116,7 +116,7 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 		mipmapped = false;
 		buffer=(unsigned char *)calloc(4,rw * (rh+1));
 		deletebuffer=true;
-		//texheight=-h;	
+		//texheight=-h;
 	}
 	else
 	{
@@ -149,6 +149,19 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 		sourcetype = GL_BGRA;
 	}
 
+#ifdef ANDROID
+	if (glTextureBytes == 1)
+	{
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		sourcetype = GL_RED;
+		texformat = GL_R8;
+	}
+    else
+    {
+		texformat = sourcetype = GL_BGRA;
+    }
+#endif
+
 	if (!firstCall && glBufferID > 0)
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, rw, rh, sourcetype, GL_UNSIGNED_BYTE, buffer);
 	else
@@ -174,7 +187,7 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 
 
 //===========================================================================
-// 
+//
 //
 //
 //===========================================================================
@@ -191,6 +204,9 @@ void FHardwareTexture::AllocateBuffer(int w, int h, int texelsize)
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, glBufferID);
 		glBufferData(GL_PIXEL_UNPACK_BUFFER, w*h*texelsize, nullptr, GL_STREAM_DRAW);
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+#ifdef ANDROID
+		size = w*h*texelsize;
+#endif
 	}
 }
 
@@ -198,23 +214,27 @@ void FHardwareTexture::AllocateBuffer(int w, int h, int texelsize)
 uint8_t *FHardwareTexture::MapBuffer()
 {
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, glBufferID);
+#ifdef ANDROID
+	return (uint8_t*)glMapBufferRange (GL_PIXEL_UNPACK_BUFFER, 0, size, GL_MAP_WRITE_BIT );
+#else
 	return (uint8_t*)glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+#endif
 }
 
 //===========================================================================
-// 
+//
 //	Destroys the texture
 //
 //===========================================================================
-FHardwareTexture::~FHardwareTexture() 
-{ 
+FHardwareTexture::~FHardwareTexture()
+{
 	if (glTexID != 0) glDeleteTextures(1, &glTexID);
 	if (glBufferID != 0) glDeleteBuffers(1, &glBufferID);
 }
 
 
 //===========================================================================
-// 
+//
 //	Binds this patch
 //
 //===========================================================================
@@ -258,7 +278,7 @@ void FHardwareTexture::UnbindAll()
 }
 
 //===========================================================================
-// 
+//
 //	Creates a depth buffer for this texture
 //
 //===========================================================================
@@ -269,7 +289,7 @@ int FHardwareTexture::GetDepthBuffer(int width, int height)
 	{
 		glGenRenderbuffers(1, &glDepthID);
 		glBindRenderbuffer(GL_RENDERBUFFER, glDepthID);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8,
 			GetTexDimension(width), GetTexDimension(height));
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	}
@@ -278,7 +298,7 @@ int FHardwareTexture::GetDepthBuffer(int width, int height)
 
 
 //===========================================================================
-// 
+//
 //	Binds this texture's surfaces to the current framrbuffer
 //
 //===========================================================================
@@ -294,7 +314,7 @@ void FHardwareTexture::BindToFrameBuffer(int width, int height)
 
 
 //===========================================================================
-// 
+//
 //	Binds a texture to the renderer
 //
 //===========================================================================

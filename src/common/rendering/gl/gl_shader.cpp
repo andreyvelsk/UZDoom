@@ -1,4 +1,4 @@
-// 
+//
 //---------------------------------------------------------------------------
 //
 // Copyright(C) 2004-2016 Christoph Oelckers
@@ -51,7 +51,13 @@
 #include <map>
 #include <memory>
 
+
 EXTERN_CVAR(Bool, r_skipmats)
+#ifdef ANDROID
+EXTERN_CVAR(Bool, gl_customshader)
+CVAR(Bool, gl_lite_shader, false, 0);
+#endif
+
 
 namespace OpenGLRenderer
 {
@@ -68,6 +74,9 @@ static std::map<FString, std::unique_ptr<ProgramBinary>> ShaderCache; // Not a T
 
 bool IsShaderCacheActive()
 {
+#ifdef ANDROID
+	return false;
+#endif
 	static bool active = true;
 	static bool firstcall = true;
 
@@ -258,7 +267,7 @@ FString ProcessShaderError(const char * shaderError, TArray<FString> &filenames_
 			else if((state == READING_LINE_COLON && err[cur] == ':') || (state == READING_LINE_PARENTHESES && err[cur] == ')'))
 			{
 				FString line_num_str = err.Mid(state_start, cur - state_start);
-				
+
 				if(state == READING_LINE_PARENTHESES)
 				{
 					cur+= 3; // skip ") :"
@@ -270,7 +279,7 @@ FString ProcessShaderError(const char * shaderError, TArray<FString> &filenames_
 
 				int64_t old_len = cur - line_start;
 				FString new_err = "File '" + filenames_for_error[lump_num - 1] + "', Line " + line_num_str + ": ";
-				
+
 				int64_t diff = new_err.Len() - old_len;
 
 				err = err.Left(line_start) + new_err + err.Mid(line_start + old_len);
@@ -312,6 +321,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 		// these settings are actually pointless but there seem to be some old ATI drivers that fail to compile the shader without setting the precision here.
 		precision highp int;
 		precision highp float;
+		precision highp sampler2DArray;
 
 		// This must match the HWViewpointUniforms struct
 		layout(std140) uniform ViewpointUBO {
@@ -323,12 +333,12 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 			vec4 uClipLine;
 
 			float uGlobVis;			// uGlobVis = R_GetGlobVis(r_visibility) / 32.0
-			int uPalLightLevels;	
+			int uPalLightLevels;
 			int uViewHeight;		// Software fuzz scaling
 			float uClipHeight;
 			float uClipHeightDirection;
 			int uShadowmapFilter;
-			
+
 			int uLightBlendMode;
 
 			float uThickFogDistance;
@@ -485,10 +495,13 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 	assert(screen->mLights != NULL);
 	assert(screen->mBones != NULL);
 
-
+#ifdef ANDROID
+    bool lightbuffertype = screen->mLights->GetBufferType();
+	vp_comb.AppendFormat("#version 320 es\n#define NO_CLIPDISTANCE_SUPPORT\n#define NUM_UBO_LIGHTS %d\n#define NUM_UBO_BONES %d\n", screen->mLights->GetBlockSize(), screen->mBones->GetBlockSize());
+#else
 	if ((gl.flags & RFL_SHADER_STORAGE_BUFFER) && screen->allowSSBO())
 		vp_comb << "#version 430 core\n#define SUPPORTS_SHADOWMAPS\n";
-	else 
+	else
 		vp_comb << "#version 330 core\n";
 
 	bool lightbuffertype = screen->mLights->GetBufferType();
@@ -496,6 +509,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 		vp_comb.AppendFormat("#define NUM_UBO_LIGHTS %d\n#define NUM_UBO_BONES %d\n", screen->mLights->GetBlockSize(), screen->mBones->GetBlockSize());
 	else
 		vp_comb << "#define SHADER_STORAGE_LIGHTS\n#define SHADER_STORAGE_BONES\n";
+#endif
 
 	FString fp_comb = vp_comb;
 	vp_comb << defines << i_data.GetChars();
@@ -843,6 +857,11 @@ FShader *FShaderCollection::Compile (const char *ShaderName, const char *ShaderP
 	if (!usediscard) defines += "#define NO_ALPHATEST\n";
 	if (passType == GBUFFER_PASS) defines += "#define GBUFFER_PASS\n";
 
+#ifdef ANDROID
+	if(gl_lite_shader)
+		defines += "#define SHADER_LITE\n";
+#endif
+
 	FShader *shader = NULL;
 	try
 	{
@@ -974,7 +993,7 @@ bool FShaderCollection::CompileNextShader()
 		{
 			mCompileIndex = 0;
 			mCompileState++;
-			
+
 		}
 	}
 	else if (mCompileState == 1)
@@ -986,7 +1005,11 @@ bool FShaderCollection::CompileNextShader()
 		{
 			mCompileIndex = 0;
 			mCompileState++;
+#ifdef __MOBILE__
+			if (usershaders.Size() == 0 || !gl_customshader) mCompileState++;
+#else
 			if (usershaders.Size() == 0) mCompileState++;
+#endif
 		}
 	}
 	else if (mCompileState == 2)

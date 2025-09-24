@@ -153,7 +153,11 @@ CUSTOM_CVAR(Int, gl_maplightmode, -1, CVAR_NOINITCALL | CVAR_CHEAT) // this is j
 	if (self > 4 || self < -1) self = -1;
 }
 
+#ifdef ANDROID // Default ot performance lighting mode
+CUSTOM_CVARD(Int, gl_lightmode, 0, CVAR_ARCHIVE, "Select lighting mode. 2 is vanilla accurate, 1 is accurate to the ZDoom software renderer and 0 is a less demanding non-shader implementation")
+#else
 CUSTOM_CVARD(Int, gl_lightmode, 1, CVAR_ARCHIVE, "Select lighting mode. 2 is vanilla accurate, 1 is accurate to the ZDoom software renderer and 0 is a less demanding non-shader implementation")
+#endif
 {
 	if (self < 0 || self > 2) self = 1;
 }
@@ -574,7 +578,7 @@ void G_InitNew (const char *mapname, bool bTitleLevel)
 
 	primaryLevel->lightlists.wall_dlist.Clear();
 	primaryLevel->lightlists.flat_dlist.Clear();
-	
+
 	// did we have any level before?
 	if (primaryLevel->info != nullptr)
 		staticEventManager.WorldUnloaded(FString());	// [MK] don't pass the new map, as it's not a level transition
@@ -672,7 +676,7 @@ void G_InitNew (const char *mapname, bool bTitleLevel)
 	{
 		gamestate = GS_LEVEL;
 	}
-	
+
 	if (!savegamerestore)
 		startpos = laststartpos = 0;
 	G_DoLoadLevel (mapname, startpos, false, !savegamerestore);
@@ -751,7 +755,7 @@ void FLevelLocals::ChangeLevel(const char *levelname, int position, int inflags,
 		{
 			nextlevel = NextMap;	// If there is already an end sequence please leave it alone!
 		}
-		else 
+		else
 		{
 			nextlevel.Format("enDSeQ%04x", gameinfo.DefaultEndSequence.GetIndex());
 		}
@@ -793,8 +797,8 @@ void FLevelLocals::ChangeLevel(const char *levelname, int position, int inflags,
 
 	startpos = position;
 	SetMusicVolume(1.0);
-		
-	if (nextinfo != NULL) 
+
+	if (nextinfo != NULL)
 	{
 		if (thiscluster != nextcluster || (thiscluster && !(thiscluster->flags & CLUSTER_HUB)))
 		{
@@ -1003,7 +1007,7 @@ DIntermissionController* FLevelLocals::CreateIntermission()
 	else if (!deathmatch)
 	{
 		FExitText *ext = nullptr;
-		
+
 		if (flags3 & LEVEL3_EXITSECRETUSED) ext = info->ExitMapTexts.CheckKey(NAME_Secret);
 		else if (flags3 & LEVEL3_EXITNORMALUSED) ext = info->ExitMapTexts.CheckKey(NAME_Normal);
 		if (ext == nullptr) ext = info->ExitMapTexts.CheckKey(nextlevel);
@@ -1068,7 +1072,7 @@ void RunIntermission(level_info_t* fromMap, level_info_t* toMap, DIntermissionCo
 	cutscene.runner = CreateRunner(false, ending ? ST_UNSKIPPABLE : ST_MUST_BE_SKIPPABLE);
 	GC::WriteBarrier(cutscene.runner);
 	cutscene.completion = std::move(completionf);
-	
+
 	// retrieve cluster relations for cluster-based cutscenes.
 	cluster_info_t* fromcluster = nullptr, *tocluster = nullptr;
 	if (fromMap) fromcluster = FindClusterInfo(fromMap->cluster);
@@ -1112,21 +1116,21 @@ void RunIntermission(level_info_t* fromMap, level_info_t* toMap, DIntermissionCo
 void G_DoCompleted (void)
 {
 	gameaction = ga_nothing;
-	
+
 	if (   gamestate == GS_DEMOSCREEN
 		|| gamestate == GS_FULLCONSOLE
 		|| gamestate == GS_STARTUP)
 	{
 		return;
 	}
-	
+
 	if (gamestate == GS_TITLELEVEL)
 	{
 		G_DoLoadLevel (nextlevel, startpos, false, false);
 		viewactive = true;
 		return;
 	}
-	
+
 	if (automapactive)
 		AM_Stop ();
 
@@ -1148,7 +1152,7 @@ void G_DoCompleted (void)
 		// [RH] If you ever get a statistics driver operational, adapt this.
 		//	if (statcopy)
 		//		memcpy (statcopy, &wminfo, sizeof(wminfo));
-		
+
 		statusScreen = WI_Start (&staticWmInfo);
 	}
 	bool endgame = strncmp(nextlevel.GetChars(), "enDSeQ", 6) == 0;
@@ -1175,7 +1179,7 @@ bool FLevelLocals::DoCompleted (FString nextlevel, wbstartstruct_t &wminfo)
 	// [RH] Mark this level as having been visited
 	if (!(flags & LEVEL_CHANGEMAPCHEAT))
 		info->flags |= LEVEL_VISITED;
-	
+
 	uint32_t langtable[2] = {};
 	wminfo.finished_ep = cluster - 1;
 	wminfo.LName0 = TexMan.CheckForTexture(info->PName.GetChars(), ETextureType::MiscPatch);
@@ -1294,7 +1298,7 @@ bool FLevelLocals::DoCompleted (FString nextlevel, wbstartstruct_t &wminfo)
 	}
 	StartTravel();
 	soundEngine->BlockNewSounds(false);
-	
+
 	if (mode == FINISH_SameHub)
 	{ // Remember the level's state for re-entry.
 		if (!(flags2 & LEVEL2_FORGETSTATE))
@@ -1350,12 +1354,12 @@ void DAutosaver::Tick ()
 
 //==========================================================================
 //
-// G_DoLoadLevel 
+// G_DoLoadLevel
 //
 //==========================================================================
 
-extern gamestate_t 	wipegamestate; 
- 
+extern gamestate_t 	wipegamestate;
+
 void G_DoLoadLevel(const FString &nextmapname, int position, bool autosave, bool newGame)
 {
 	gamestate_t oldgs = gamestate;
@@ -1441,7 +1445,7 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 	InitSkyMap (this);
 
 	for (i = 0; i < MAXPLAYERS; i++)
-	{ 
+	{
 		if (PlayerInGame(i) && (deathmatch || Players[i]->playerstate == PST_DEAD))
 			Players[i]->playerstate = PST_ENTER;	// [BC]
 		memset (Players[i]->frags,0,sizeof(Players[i]->frags));
@@ -1493,7 +1497,7 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 
 	starttime = gametic;
 
-	UnSnapshotLevel (!savegamerestore);	// [RH] Restore the state of the 
+	UnSnapshotLevel (!savegamerestore);	// [RH] Restore the state of the
 	int pnumerr = FinishTravel ();
 
 	if (!FromSnapshot)
@@ -1543,9 +1547,9 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 	//      regular world load (savegames are handled internally)
 	localEventManager->WorldLoaded();
 	DoDeferedScripts ();	// [RH] Do script actions that were triggered on another map.
-	
 
-	// [RH] Always save the game when entering a new 
+
+	// [RH] Always save the game when entering a new
 	if (autosave && !savegamerestore && disableautosave < 1)
 	{
 		CreateThinker<DAutosaver>();
@@ -1563,13 +1567,13 @@ void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool au
 
 //==========================================================================
 //
-// G_WorldDone 
+// G_WorldDone
 //
 //==========================================================================
 
-void FLevelLocals::WorldDone (void) 
+void FLevelLocals::WorldDone (void)
 {
-	gameaction = ga_worlddone; 
+	gameaction = ga_worlddone;
 
 
 	//Added by mc
@@ -1579,7 +1583,7 @@ void FLevelLocals::WorldDone (void)
 	}
 
 }
- 
+
 DEFINE_ACTION_FUNCTION(FLevelLocals, WorldDone)
 {
 	// This is just a dummy to make old status screens happy.
@@ -1605,8 +1609,8 @@ void G_DoMapWarp()
 //
 //==========================================================================
 
-void G_DoWorldDone (void) 
-{		
+void G_DoWorldDone (void)
+{
 	Net_ResetCommands(true);
 	gamestate = GS_LEVEL;
 	if (nextlevel.IsEmpty())
@@ -1618,7 +1622,7 @@ void G_DoWorldDone (void)
 	primaryLevel->MoveTravellers();
 	G_DoLoadLevel (nextlevel, startpos, true, false);
 	gameaction = ga_nothing;
-	viewactive = true; 
+	viewactive = true;
 	Net_SetWaiting();
 }
 
@@ -1901,7 +1905,7 @@ int FLevelLocals::FinishTravel()
 
 	return failNum;
 }
- 
+
 //==========================================================================
 //
 //
@@ -1933,7 +1937,7 @@ void FLevelLocals::Init()
 {
 	P_InitParticles(this);
 	P_ClearParticles(this);
-	
+
 	gravity = sv_gravity * 35/TICRATE;
 	aircontrol = sv_aircontrol;
 	AirControlChanged();
@@ -2009,7 +2013,7 @@ void FLevelLocals::Init()
 	AuthorName = info->AuthorName;
 	hazardcolor = info->hazardcolor;
 	hazardflash = info->hazardflash;
-	
+
 	// GL fog stuff modifiable by SetGlobalFogParameter.
 	fogdensity = info->fogdensity;
 	outsidefogdensity = info->outsidefogdensity;
@@ -2254,7 +2258,7 @@ void P_WriteACSDefereds (FSerializer &arc)
 void P_ReadACSDefereds (FSerializer &arc)
 {
 	FString MapName;
-	
+
 	P_RemoveDefereds ();
 
 	if (arc.BeginObject("deferred"))
@@ -2318,7 +2322,7 @@ size_t DSectorMarker::PropagateMark()
 	int marked = 0;
 	bool moretodo = false;
 	int numsectors = Level->sectors.Size();
-	
+
 	for (i = 0; i < SECTORSTEPSIZE && SecNum + i < numsectors; ++i)
 	{
 		sector_t *sec = &Level->sectors[SecNum + i];
@@ -2335,7 +2339,7 @@ size_t DSectorMarker::PropagateMark()
 		SecNum += i;
 		moretodo = true;
 	}
-	
+
 	if (!moretodo && Level->Polyobjects.Size() > 0)
 	{
 		for (i = 0; i < POLYSTEPSIZE && PolyNum + i < (int)Level->Polyobjects.Size(); ++i)

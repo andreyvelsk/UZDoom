@@ -2072,13 +2072,13 @@ extern int ogl_ext_ARB_invalidate_subdata;
 #define GL_ARB_buffer_storage 1
 extern void (CODEGEN_FUNCPTR *_ptrc_glBufferStorage)(GLenum target, GLsizeiptr size, const void * data, GLbitfield flags);
 #define glBufferStorage _ptrc_glBufferStorage
-#endif /*GL_ARB_buffer_storage*/ 
+#endif /*GL_ARB_buffer_storage*/
 
 #ifndef GL_ARB_shader_storage_buffer_object
 #define GL_ARB_shader_storage_buffer_object 1
 extern void (CODEGEN_FUNCPTR *_ptrc_glShaderStorageBlockBinding)(GLuint program, GLuint storageBlockIndex, GLuint storageBlockBinding);
 #define glShaderStorageBlockBinding _ptrc_glShaderStorageBlockBinding
-#endif /*GL_ARB_shader_storage_buffer_object*/ 
+#endif /*GL_ARB_shader_storage_buffer_object*/
 
 #ifndef GL_ARB_texture_compression
 #define GL_ARB_texture_compression 1
@@ -2096,7 +2096,7 @@ extern void (CODEGEN_FUNCPTR *_ptrc_glCompressedTexSubImage3DARB)(GLenum target,
 #define glCompressedTexSubImage3DARB _ptrc_glCompressedTexSubImage3DARB
 extern void (CODEGEN_FUNCPTR *_ptrc_glGetCompressedTexImageARB)(GLenum target, GLint level, void * img);
 #define glGetCompressedTexImageARB _ptrc_glGetCompressedTexImageARB
-#endif /*GL_ARB_texture_compression*/ 
+#endif /*GL_ARB_texture_compression*/
 
 
 #ifndef GL_EXT_framebuffer_object
@@ -2135,7 +2135,7 @@ extern GLboolean (CODEGEN_FUNCPTR *_ptrc_glIsRenderbufferEXT)(GLuint renderbuffe
 #define glIsRenderbufferEXT _ptrc_glIsRenderbufferEXT
 extern void (CODEGEN_FUNCPTR *_ptrc_glRenderbufferStorageEXT)(GLenum target, GLenum internalformat, GLsizei width, GLsizei height);
 #define glRenderbufferStorageEXT _ptrc_glRenderbufferStorageEXT
-#endif /*GL_EXT_framebuffer_object*/ 
+#endif /*GL_EXT_framebuffer_object*/
 
 
 
@@ -2164,7 +2164,7 @@ extern void (CODEGEN_FUNCPTR *_ptrc_glPopDebugGroup)(void);
 #define glPopDebugGroup _ptrc_glPopDebugGroup
 extern void (CODEGEN_FUNCPTR *_ptrc_glPushDebugGroup)(GLenum source, GLuint id, GLsizei length, const GLchar * message);
 #define glPushDebugGroup _ptrc_glPushDebugGroup
-#endif /*GL_KHR_debug*/ 
+#endif /*GL_KHR_debug*/
 
 #ifndef GL_ARB_invalidate_subdata
 #define GL_ARB_invalidate_subdata 1
@@ -2180,7 +2180,7 @@ extern void (CODEGEN_FUNCPTR *_ptrc_glInvalidateTexImage)(GLuint texture, GLint 
 #define glInvalidateTexImage _ptrc_glInvalidateTexImage
 extern void (CODEGEN_FUNCPTR *_ptrc_glInvalidateTexSubImage)(GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth);
 #define glInvalidateTexSubImage _ptrc_glInvalidateTexSubImage
-#endif /*GL_ARB_invalidate_subdata*/ 
+#endif /*GL_ARB_invalidate_subdata*/
 
 extern void (CODEGEN_FUNCPTR *_ptrc_glAccum)(GLenum op, GLfloat value);
 #define glAccum _ptrc_glAccum
@@ -2203,7 +2203,11 @@ extern void (CODEGEN_FUNCPTR *_ptrc_glClearAccum)(GLfloat red, GLfloat green, GL
 extern void (CODEGEN_FUNCPTR *_ptrc_glClearColor)(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
 #define glClearColor _ptrc_glClearColor
 extern void (CODEGEN_FUNCPTR *_ptrc_glClearDepth)(GLdouble depth);
+#ifdef ANDROID
+#define glClearDepth _ptrc_glClearDepthf
+#else
 #define glClearDepth _ptrc_glClearDepth
+#endif
 extern void (CODEGEN_FUNCPTR *_ptrc_glClearIndex)(GLfloat c);
 #define glClearIndex _ptrc_glClearIndex
 extern void (CODEGEN_FUNCPTR *_ptrc_glClearStencil)(GLint s);
@@ -2288,8 +2292,14 @@ extern void (CODEGEN_FUNCPTR *_ptrc_glDepthFunc)(GLenum func);
 #define glDepthFunc _ptrc_glDepthFunc
 extern void (CODEGEN_FUNCPTR *_ptrc_glDepthMask)(GLboolean flag);
 #define glDepthMask _ptrc_glDepthMask
+#ifdef ANDROID
+extern void (CODEGEN_FUNCPTR *_ptrc_glDepthRangef)(GLfloat ren_near, GLfloat ren_far);
+#define glDepthRangef _ptrc_glDepthRangef
+#define glDepthRange _ptrc_glDepthRangef
+#else
 extern void (CODEGEN_FUNCPTR *_ptrc_glDepthRange)(GLdouble ren_near, GLdouble ren_far);
 #define glDepthRange _ptrc_glDepthRange
+#endif
 extern void (CODEGEN_FUNCPTR *_ptrc_glDisable)(GLenum cap);
 #define glDisable _ptrc_glDisable
 extern void (CODEGEN_FUNCPTR *_ptrc_glDrawBuffer)(GLenum buf);

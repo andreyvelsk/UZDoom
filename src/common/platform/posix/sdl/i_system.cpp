@@ -338,6 +338,8 @@ bool I_PickIWad (bool showwin, FStartupSelectionInfo& info)
 		return true;
 	}
 	return false;
+#elif ANDROID
+    return false;
 #else
 	return LauncherWindow::ExecModal(info);
 #endif
@@ -362,7 +364,7 @@ FString I_GetFromClipboard (bool use_primary_selection)
 FString I_GetCWD()
 {
 	char* curdir = getcwd(NULL,0);
-	if (!curdir) 
+	if (!curdir)
 	{
 		return "";
 	}
