@@ -1,5 +1,6 @@
 //
-// Copyright (C) 2002-2005  3Dlabs Inc. Ltd.
+// Copyright (C) 2016 Google, Inc.
+//
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -14,7 +15,7 @@
 //    disclaimer in the documentation and/or other materials provided
 //    with the distribution.
 //
-//    Neither the name of 3Dlabs Inc. Ltd. nor the names of its
+//    Neither the name of Google, Inc., nor the names of its
 //    contributors may be used to endorse or promote products derived
 //    from this software without specific prior written permission.
 //
@@ -32,43 +33,37 @@
 // POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "InitializeDll.h"
+#ifndef HLSLOPMAP_H_
+#define HLSLOPMAP_H_
 
-#define STRICT
-#define VC_EXTRALEAN 1
-#include <windows.h>
-#include <assert.h>
+#include "hlslScanContext.h"
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
-{
-	switch (fdwReason)
-	{
-		case DLL_PROCESS_ATTACH:
+namespace glslang {
 
-            if (! glslang::InitProcess())
-                return FALSE;
-            break;
-		case DLL_THREAD_ATTACH:
+    enum PrecedenceLevel {
+        PlBad,
+        PlLogicalOr,
+        PlLogicalXor,
+        PlLogicalAnd,
+        PlBitwiseOr,
+        PlBitwiseXor,
+        PlBitwiseAnd,
+        PlEquality,
+        PlRelational,
+        PlShift,
+        PlAdd,
+        PlMul
+    };
 
-            if (! glslang::InitThread())
-                return FALSE;
-            break;
+    class HlslOpMap {
+    public:
+        static TOperator assignment(EHlslTokenClass op);
+        static TOperator binary(EHlslTokenClass op);
+        static TOperator preUnary(EHlslTokenClass op);
+        static TOperator postUnary(EHlslTokenClass op);
+        static PrecedenceLevel precedenceLevel(TOperator);
+    };
 
-		case DLL_THREAD_DETACH:
+} // end namespace glslang
 
-			if (! glslang::DetachThread())
-				return FALSE;
-			break;
-
-		case DLL_PROCESS_DETACH:
-
-			glslang::DetachProcess();
-			break;
-
-		default:
-			assert(0 && "DllMain(): Reason for calling DLL Main is unknown");
-			return FALSE;
-	}
-
-	return TRUE;
-}
+#endif // HLSLOPMAP_H_

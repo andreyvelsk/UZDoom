@@ -1,5 +1,6 @@
 //
-// Copyright (C) 2002-2005  3Dlabs Inc. Ltd.
+// Copyright (C) 2016 LunarG, Inc.
+//
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -14,7 +15,7 @@
 //    disclaimer in the documentation and/or other materials provided
 //    with the distribution.
 //
-//    Neither the name of 3Dlabs Inc. Ltd. nor the names of its
+//    Neither the name of Google, Inc., nor the names of its
 //    contributors may be used to endorse or promote products derived
 //    from this software without specific prior written permission.
 //
@@ -31,19 +32,28 @@
 // ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 //
-#ifndef __INITIALIZEDLL_H
-#define __INITIALIZEDLL_H
 
-#include "../glslang/OSDependent/osinclude.h"
+#ifndef HLSLATTRIBUTES_H_
+#define HLSLATTRIBUTES_H_
+
+#include <unordered_map>
+#include <functional>
+
+#include "../MachineIndependent/attribute.h"
+#include "../MachineIndependent/SymbolTable.h"
+#include "hlslScanContext.h"
 
 namespace glslang {
 
-bool InitProcess();
-bool InitThread();
-bool DetachThread();  // not called from standalone, perhaps other tools rely on parts of it
-bool DetachProcess(); // not called from standalone, perhaps other tools rely on parts of it
+    class TFunctionDeclarator {
+    public:
+        TFunctionDeclarator() : function(nullptr), body(nullptr) { }
+        TSourceLoc loc;
+        TFunction* function;
+        TAttributes attributes;
+        TVector<HlslToken>* body;
+    };
 
 } // end namespace glslang
 
-#endif // __INITIALIZEDLL_H
-
+#endif // HLSLATTRIBUTES_H_
