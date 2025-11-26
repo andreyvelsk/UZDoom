@@ -29,7 +29,13 @@
 #include "vk_framebuffer.h"
 
 CVAR(Bool, vk_hdr, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
+#ifdef ANDROID
+static bool vk_exclusivefullscreen = true;
+static bool isApplicationPaused = false;
+static bool needToRecreaseVulkanSurfaces = false;
+#else
 CVAR(Bool, vk_exclusivefullscreen, false, CVAR_ARCHIVE | CVAR_GLOBALCONFIG);
+#endif
 
 VkFramebufferManager::VkFramebufferManager(VulkanRenderDevice* fb) : fb(fb)
 {
@@ -45,10 +51,33 @@ VkFramebufferManager::~VkFramebufferManager()
 {
 }
 
+#ifdef ANDROID
+extern "C" {
+void DestroyVulkanSwapChain() {
+    isApplicationPaused = true;
+}
+
+void RecreateVulkanSwapChain() {
+    needToRecreaseVulkanSurfaces = isApplicationPaused;
+    isApplicationPaused = false;
+}
+}
+#endif
+
 void VkFramebufferManager::AcquireImage()
 {
-	bool exclusiveFullscreen = fb->IsFullscreen() && vk_exclusivefullscreen;
+#ifdef ANDROID
+    if (isApplicationPaused){
+        return;
+    }
+#endif
+	bool exclusiveFullscreen = true;
+#ifdef ANDROID
+	if (SwapChain->Lost() || needToRecreaseVulkanSurfaces  || fb->GetClientWidth() != CurrentWidth || fb->GetClientHeight() != CurrentHeight || fb->GetVSync() != CurrentVSync || CurrentHdr != vk_hdr || CurrentExclusiveFullscreen != exclusiveFullscreen)
+#else
+    bool exclusiveFullscreen = fb->IsFullscreen() && vk_exclusivefullscreen;
 	if (SwapChain->Lost() || fb->GetClientWidth() != CurrentWidth || fb->GetClientHeight() != CurrentHeight || fb->GetVSync() != CurrentVSync || CurrentHdr != vk_hdr || CurrentExclusiveFullscreen != exclusiveFullscreen)
+#endif
 	{
 		Framebuffers.clear();
 
@@ -58,6 +87,12 @@ void VkFramebufferManager::AcquireImage()
 		CurrentHdr = vk_hdr;
 		CurrentExclusiveFullscreen = exclusiveFullscreen;
 
+#ifdef ANDROID
+        if (needToRecreaseVulkanSurfaces){
+            fb->RecreateSurface();
+            needToRecreaseVulkanSurfaces = false;
+        }
+#endif
 		SwapChain->Create(CurrentWidth, CurrentHeight, CurrentVSync ? 2 : 3, CurrentVSync, CurrentHdr, CurrentExclusiveFullscreen);
 
 		RenderFinishedSemaphores.clear();

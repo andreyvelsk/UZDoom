@@ -154,14 +154,22 @@ FString I_DetectOS()
 
 void I_StartupJoysticks();
 
+#ifdef ANDROID
+int SDL_main(int argc, char **argv)
+#else
 int main (int argc, char **argv)
+#endif
 {
-#if !defined (__APPLE__)
+#if !defined (__APPLE__) && !ANDROID
 	{
 		int s[4] = { SIGSEGV, SIGILL, SIGFPE, SIGBUS };
 		cc_install_handlers(argc, argv, 4, s, GAMENAMELOWERCASE "-crash.log", GetCrashInfo);
 	}
 #endif // !__APPLE__
+
+#ifdef ANDROID
+    chdir(getenv("PATH_TO_UZDOOM_USER_FOLDER"));
+#endif
 
 	signal(SIGINT, SignalHandler);
 	signal(SIGTERM, SignalHandler);
@@ -213,3 +221,21 @@ int main (int argc, char **argv)
 
 	return result;
 }
+
+#ifdef ANDROID
+extern "C"{
+void resumeSound() {
+}
+
+void pauseSound() {
+}
+
+bool needToShowScreenControls() {
+    return true;
+}
+
+bool needToInvokeMouseButtonsEvents(){
+    return false;
+}
+}
+#endif
