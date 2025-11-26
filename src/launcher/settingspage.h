@@ -1,6 +1,7 @@
 #pragma once
 
 #include <zwidget/core/widget.h>
+#include "zstring.h"
 
 #define RENDER_BACKENDS
 

@@ -118,7 +118,11 @@ double INFINITY = 1.0/0.0;  /* 99e999; */
 double INFINITY =  1.79769313486231570815E308;    /* 2**1024*(1-MACHEP) */
 #endif
 #ifdef NANS
+#if ANDROID
+double NAN = __builtin_nan("");
+#else
 double NAN = 1.0/0.0 - 1.0/0.0;
+#endif
 #else
 double NAN = 0.0;
 #endif

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.11)
 project(zwidget)
 
-if (UNIX AND NOT APPLE)
+if (UNIX AND NOT APPLE AND NOT ANDROID)
 	include(FindPkgConfig)
 	pkg_check_modules(DBUS dbus-1)
 	if (!DBUS_FOUND)
@@ -141,6 +141,7 @@ set(ZWIDGET_SDL2_SOURCES
 	src/window/sdl2/sdl2_display_window.h
 )
 
+if (NOT ANDROID)
 set(ZWIDGET_X11_SOURCES
 	src/window/x11/x11_display_backend.cpp
 	src/window/x11/x11_display_backend.h
@@ -162,6 +163,7 @@ set(ZWIDGET_WAYLAND_SOURCES
 	src/window/wayland/wl_xdg_toplevel_icon.cpp
 	src/window/wayland/wl_xdg_toplevel_icon.hpp
 )
+endif ()
 
 source_group("src" REGULAR_EXPRESSION "${CMAKE_CURRENT_SOURCE_DIR}/src/.+")
 source_group("src\\core" REGULAR_EXPRESSION "${CMAKE_CURRENT_SOURCE_DIR}/src/core/.+")
@@ -239,8 +241,11 @@ elseif(APPLE)
 	set(ZWIDGET_LIBS ${CMAKE_DL_LIBS} -ldl)
 	set(ZWIDGET_DEFINES -DUNIX -D_UNIX)
 	set(ZWIDGET_LINK_OPTIONS -pthread)
-else()
-	set(ZWIDGET_SOURCES ${ZWIDGET_SOURCES} ${ZWIDGET_X11_SOURCES})
+elseif(ANDROID)
+    set(ZWIDGET_LIBS ${CMAKE_DL_LIBS})
+    set(ZWIDGET_DEFINES -DUNIX -D_UNIX)
+else ()
+    set(ZWIDGET_SOURCES ${ZWIDGET_SOURCES} ${ZWIDGET_X11_SOURCES})
 	set(ZWIDGET_LIBS ${CMAKE_DL_LIBS} -lX11 -lXi)
 	set(ZWIDGET_DEFINES -DUNIX -D_UNIX -DUSE_X11)
 	set(ZWIDGET_LINK_OPTIONS -pthread)
@@ -259,7 +264,7 @@ else()
 	endif()
 endif()
 
-if(SDL2_FOUND AND NOT WIN32)
+if((SDL2_FOUND AND NOT WIN32) OR ANDROID)
 	set(ZWIDGET_SOURCES ${ZWIDGET_SOURCES} ${ZWIDGET_SDL2_SOURCES})
 	set(ZWIDGET_DEFINES ${ZWIDGET_DEFINES} -DUSE_SDL2)
 endif()

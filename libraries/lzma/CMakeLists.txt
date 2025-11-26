@@ -37,7 +37,6 @@ add_library( lzma STATIC
 	C/Ppmd7Dec.c
 	C/Ppmd7Enc.c
 	C/Sha256.c
-	C/Sha256Opt.c
 	C/Sort.c
 	C/SwapBytes.c
 	C/Threads.c
@@ -48,4 +47,12 @@ add_library( lzma STATIC
 	C/XzEnc.c
 	C/XzIn.c
 )
+
+if (NOT ANDROID)
+    target_sources(lzma PRIVATE C/Sha256Opt.c)
+else ()
+    if (NOT ${ANDROID_ABI} STREQUAL "armeabi-v7a")
+        target_sources(lzma PRIVATE C/Sha256Opt.c)
+    endif ()
+endif ()
 target_link_libraries( lzma Threads::Threads )

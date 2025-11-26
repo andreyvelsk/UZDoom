@@ -85,6 +85,7 @@
 #include "version.h"
 #include "vm.h"
 #include "wi_stuff.h"
+#include <miniz.h>
 
 static FRandom pr_dmspawn ("DMSpawn");
 static FRandom pr_pspawn ("PlayerSpawn");
@@ -152,15 +153,15 @@ extern bool playedtitlemusic;
 
 gameaction_t	gameaction;
 
-bool 			sendpause;				// send a pause event next tic 
-bool			sendsave;				// send a save event next tic 
+bool 			sendpause;				// send a pause event next tic
+bool			sendsave;				// send a save event next tic
 bool			sendturn180;			// [RH] send a 180 degree turn next tic
 bool 			usergame;				// ok to save / end game
 bool			insave;					// Game is saving - used to block exit commands
 
-bool			timingdemo; 			// if true, exit with report on completion 
-bool 			nodrawers;				// for comparative timing purposes 
-bool 			noblit; 				// for comparative timing purposes 
+bool			timingdemo; 			// if true, exit with report on completion
+bool 			nodrawers;				// for comparative timing purposes
+bool 			noblit; 				// for comparative timing purposes
 
 bool	 		viewactive;
 
@@ -185,13 +186,13 @@ uint8_t*			demobodyspot;
 size_t			maxdemosize;
 uint8_t*			zdemformend;			// end of FORM ZDEM chunk
 uint8_t*			zdembodyend;			// end of ZDEM BODY chunk
-bool 			singledemo; 			// quit after playing a demo from cmdline 
- 
-bool 			precache = true;		// if true, load all graphics at start 
- 
- 
-#define MAXPLMOVE				(forwardmove[1]) 
- 
+bool 			singledemo; 			// quit after playing a demo from cmdline
+
+bool 			precache = true;		// if true, load all graphics at start
+
+
+#define MAXPLMOVE				(forwardmove[1])
+
 #define TURBOTHRESHOLD	12800
 
 EXTERN_CVAR (Int, turnspeedwalkfast)
@@ -204,7 +205,7 @@ FIntCVarRef		*angleturn[4] = {&turnspeedwalkfast, &turnspeedsprintfast, &turnspe
 int				flyspeed[2] = {1*256, 3*256};
 int				lookspeed[2] = {450, 512};
 
-#define SLOWTURNTICS	6 
+#define SLOWTURNTICS	6
 
 CVAR (Bool,		cl_run,			false,	CVAR_GLOBALCONFIG|CVAR_ARCHIVE)		// Always run?
 CVAR (Bool,		freelook,		true,	CVAR_GLOBALCONFIG|CVAR_ARCHIVE)		// Always mlook?
@@ -222,14 +223,14 @@ CVAR (Float, cl_analog_sensitivity_pitch,	0.6f,	CVAR_GLOBALCONFIG|CVAR_ARCHIVE)
 CVAR (Bool, cl_analog_run, true, CVAR_GLOBALCONFIG|CVAR_ARCHIVE)
 CVAR (Bool, cl_analog_straferun, false, CVAR_GLOBALCONFIG|CVAR_ARCHIVE)
 
-int 			turnheld;								// for accelerative turning 
+int 			turnheld;								// for accelerative turning
 
 EXTERN_CVAR (Bool, invertmouse)
 EXTERN_CVAR (Bool, invertmousex)
 
-// mouse values are used once 
+// mouse values are used once
 float 			mousex;
-float 			mousey; 		
+float 			mousey;
 
 FString			savegamefile;
 FString			savedescription;
@@ -250,7 +251,7 @@ EXTERN_CVAR (Int, team)
 
 CVAR (Bool, teamplay, false, CVAR_SERVERINFO)
 
-// Workaround for x64 code generation bug in MSVC 2015 
+// Workaround for x64 code generation bug in MSVC 2015
 // Optimized targets contain illegal instructions in the function below
 #if defined _M_X64 && _MSC_VER < 1910
 #pragma optimize("", off)
@@ -538,7 +539,7 @@ CCMD (drop)
 }
 
 CCMD (useflechette)
-{ 
+{
 	if (players[consoleplayer].mo == nullptr) return;
 	IFVIRTUALPTRNAME(players[consoleplayer].mo, NAME_PlayerPawn, GetFlechetteItem)
 	{
@@ -618,7 +619,7 @@ void G_BuildTiccmd (usercmd_t *cmd)
 
 	usercmd_t	*base;
 
-	base = G_BaseTiccmd (); 
+	base = G_BaseTiccmd ();
 	*cmd = *base;
 
 	// Update axis polling for the button map
@@ -651,7 +652,7 @@ void G_BuildTiccmd (usercmd_t *cmd)
 
 		if (turnheld < SLOWTURNTICS)
 			tspeed += 2;		// slow turn
-		
+
 		if (buttonMap.ButtonDownDigital(Button_Right))
 		{
 			G_AddViewAngle (*angleturn[tspeed]);
@@ -983,7 +984,7 @@ static void ChangeSpy (int changespy)
 	// Otherwise, cycle to the next player.
 	bool checkTeam = !demoplayback && deathmatch;
 	int pnum = consoleplayer;
-	if (changespy != SPY_CANCEL) 
+	if (changespy != SPY_CANCEL)
 	{
 		player_t *player = players[consoleplayer].camera->player;
 		// only use the camera as starting index if it's a valid player.
@@ -1040,15 +1041,15 @@ bool G_Responder (event_t *ev)
 	// check events
 	if (ev->type != EV_Mouse && primaryLevel->localEventManager->Responder(ev)) // [ZZ] ZScript ate the event // update 07.03.17: mouse events are handled directly
 		return true;
-	
+
 	if (gamestate == GS_INTRO || gamestate == GS_CUTSCENE)
 	{
 		return ScreenJobResponder(ev);
 	}
-	
+
 	// any other key pops up menu if in demos
 	// [RH] But only if the key isn't bound to a "special" command
-	if (gameaction == ga_nothing && 
+	if (gameaction == ga_nothing &&
 		(demoplayback || gamestate == GS_DEMOSCREEN || gamestate == GS_TITLELEVEL))
 	{
 		if (chatmodeon) chatmodeon = 0;
@@ -1466,10 +1467,10 @@ void FLevelLocals::PlayerReborn (int player)
 }
 
 //
-// G_CheckSpot	
+// G_CheckSpot
 // Returns false if the player cannot be respawned
-// at the given mapthing spot  
-// because something is occupying it 
+// at the given mapthing spot
+// because something is occupying it
 //
 
 bool FLevelLocals::CheckSpot (int playernum, FPlayerStart *mthing)
@@ -1518,9 +1519,9 @@ bool FLevelLocals::CheckSpot (int playernum, FPlayerStart *mthing)
 
 
 //
-// G_DeathMatchSpawnPlayer 
-// Spawns a player at one of the random death match spots 
-// called at level load and each death 
+// G_DeathMatchSpawnPlayer
+// Spawns a player at one of the random death match spots
+// called at level load and each death
 //
 
 // [RH] Returns the distance of the closest player to the given mapthing
@@ -1983,7 +1984,7 @@ void C_SerializeCVars(FSerializer& arc, const char* label, uint32_t filter)
 			while (it.NextPair(pair))
 			{
 				auto cvar = pair->Value;
-				
+
 				if ((cvar->Flags & filter) && !(cvar->Flags & (CVAR_NOSAVE | CVAR_IGNORE | CVAR_CONFIG_ONLY)))
 				{
 					UCVarValue val = cvar->GetGenericRep(CVAR_String);
@@ -2288,8 +2289,8 @@ void G_DoAutoSave ()
 	UCVarValue num;
 	const char *readableTime;
 	int count = autosavecount != 0 ? autosavecount : 1;
-	
-	if (nextautosave == -1) 
+
+	if (nextautosave == -1)
 	{
 		nextautosave = (autosavenum + 1) % count;
 	}
@@ -2327,8 +2328,8 @@ void G_DoQuickSave ()
 	UCVarValue num;
 	const char *readableTime;
 	int count = quicksaverotationcount != 0 ? quicksaverotationcount : 1;
-	
-	if (quicksavenum < 0) 
+
+	if (quicksavenum < 0)
 	{
 		lastquicksave = 0;
 	}
@@ -2508,7 +2509,7 @@ void G_DoSaveGame (bool okForQuicksave, bool forceQuicksave, FString filename, c
 	savegame_content.Push(savegameglobals.GetCompressedOutput());
 	savegame_filenames.Push("globals.json");
 	G_WriteSnapshots (savegame_filenames, savegame_content);
-	
+
 	for (unsigned i = 0; i < savegame_content.Size(); i++)
 		savegame_content[i].filename = savegame_filenames[i].GetChars();
 
@@ -2546,7 +2547,7 @@ void G_DoSaveGame (bool okForQuicksave, bool forceQuicksave, FString filename, c
 
 	// We don't need the snapshot any longer.
 	level.info->Snapshot.Clean();
-		
+
 	insave = false;
 
 	if (cl_waitforsave)
@@ -2605,7 +2606,7 @@ void G_ReadDemoTiccmd (usercmd_t *cmd, int player)
 			break;
 		}
 	}
-} 
+}
 
 bool stoprecording;
 
@@ -2668,7 +2669,7 @@ void G_RecordDemo (const char* name)
 	DefaultExtension (demoname, ".lmp");
 	maxdemosize = 0x20000;
 	demobuffer.Resize(maxdemosize);
-	demorecording = true; 
+	demorecording = true;
 }
 
 
@@ -2999,7 +3000,7 @@ void G_DoPlayDemo (void)
 	}
 	else
 	{
-		// don't spend a lot of time in loadlevel 
+		// don't spend a lot of time in loadlevel
 		precache = false;
 		demonew = true;
 		if (mapname.Len() != 0)
@@ -3095,10 +3096,10 @@ bool G_CheckDemoStatus (void)
 		}
 		else
 		{
-			D_AdvanceDemo (); 
+			D_AdvanceDemo ();
 		}
 
-		return true; 
+		return true;
 	}
 
 	if (demorecording)
@@ -3140,7 +3141,7 @@ bool G_CheckDemoStatus (void)
 		stoprecording = false;
 		if (saved)
 		{
-			Printf ("Demo %s recorded\n", demoname.GetChars()); 
+			Printf ("Demo %s recorded\n", demoname.GetChars());
 		}
 		else
 		{
@@ -3148,7 +3149,7 @@ bool G_CheckDemoStatus (void)
 		}
 	}
 
-	return false; 
+	return false;
 }
 
 void G_StartSlideshow(FLevelLocals *Level, FName whichone, int state)

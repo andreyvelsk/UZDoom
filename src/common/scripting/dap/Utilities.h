@@ -8,6 +8,7 @@
 #include <dap/protocol.h>
 
 #include "printf.h"
+#include "tarray.h"
 
 namespace DebugServer
 {

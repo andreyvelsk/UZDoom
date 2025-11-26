@@ -32,6 +32,7 @@ if( NOT ZDOOM_ENABLE_SWR )
 	add_definitions( -DNO_SWRENDERER )
 endif()
 
+if (NOT ANDROID)
 target_architecture(TARGET_ARCHITECTURE)
 message(STATUS "Architecture is ${TARGET_ARCHITECTURE}")
 
@@ -44,6 +45,23 @@ if( ${TARGET_ARCHITECTURE} MATCHES "x86_64" )
 	set( X64 64 )
 	add_definitions( -DARCH_IA32 )
 endif()
+else ()
+    if ( ${ANDROID_ABI} STREQUAL "arm64" )
+        set (ARM64 aarch64)
+        add_definitions( -DNO_SSE -D__ARM__ -DRAPIDJSON_ENDIAN=RAPIDJSON_LITTLEENDIAN)
+    endif()
+
+    if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
+        add_definitions( -DNO_SSE -D__ARM__ -DRAPIDJSON_ENDIAN=RAPIDJSON_LITTLEENDIAN)
+    endif()
+
+    if( ${ANDROID_ABI} STREQUAL "x86_64" )
+        set( X64 64 )
+    endif()
+    if( X64 OR ${ANDROID_ABI} STREQUAL "x86" )
+        add_definitions( -DARCH_IA32 )
+    endif()
+endif ()
 
 if( NOT PROJECT_LIBRARIES )
 	set( PROJECT_LIBRARIES "" )
@@ -78,7 +96,10 @@ if( WIN32 )
 		endif()
 	endif()
 else()
-	if( APPLE )
+    if (ANDROID)
+        set( NO_GTK ON )
+        set( DYN_GTK OFF )
+    elseif ( APPLE )
 		set( NO_GTK ON )
 		set( DYN_GTK OFF )
 
@@ -318,10 +339,12 @@ option(BUILD_FLATPAK "Enable Flatpak-specific build options" OFF)
 
 # Update gitinfo.h
 
+if (NOT ANDROID)
 add_custom_target( revision_check ALL
 	COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_SOURCE_DIR}/tools/updaterevision/UpdateRevision.cmake" "${CMAKE_BINARY_DIR}/gitinfo.h"
 	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+endif ()
 
 # required libraries
 
@@ -405,6 +428,7 @@ if (HAVE_VULKAN)
 	list (APPEND PLAT_WIN32_SOURCES common/platform/win32/win32vulkanvideo.cpp )
 endif()
 
+if (NOT ANDROID)
 # todo: implement an actual crash catcher for ARM
 # for now this is purely experimental
 if (NOT ${TARGET_ARCHITECTURE} MATCHES "arm" )
@@ -414,6 +438,7 @@ if (MSVC AND ${TARGET_ARCHITECTURE} MATCHES "arm")
 	set (PLAT_WIN32_SOURCES ${PLAT_WIN32_SOURCES} common/platform/win32/i_crash_arm.cpp )
 	add_definitions( -DNO_SSE -D__ARM__ -DRAPIDJSON_ENDIAN=RAPIDJSON_LITTLEENDIAN)
 endif()
+endif ()
 
 set( PLAT_POSIX_SOURCES
 	posix/i_steam.cpp
@@ -514,6 +539,7 @@ else()
 	endif( NOT NO_OPENMP )
 endif()
 
+if (NOT ANDROID)
 add_custom_command( OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/xlat_parser.c ${CMAKE_CURRENT_BINARY_DIR}/xlat_parser.h
 	COMMAND lemon -C${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/gamedata/xlat/xlat_parser.y
 	DEPENDS lemon ${CMAKE_CURRENT_SOURCE_DIR}/gamedata/xlat/xlat_parser.y )
@@ -525,6 +551,19 @@ add_custom_command( OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/zcc-parse.c ${CMAKE_CURRE
 add_custom_command( OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sc_man_scanner.h
 	COMMAND re2c --no-generation-date -s -o ${CMAKE_CURRENT_BINARY_DIR}/sc_man_scanner.h ${CMAKE_CURRENT_SOURCE_DIR}/common/engine/sc_man_scanner.re
 	DEPENDS re2c ${CMAKE_CURRENT_SOURCE_DIR}/common/engine/sc_man_scanner.re )
+else ()
+    add_custom_command( OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/xlat_parser.c ${CMAKE_CURRENT_BINARY_DIR}/xlat_parser.h
+            COMMAND ${LEMON_EXECUTABLE} -C${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/gamedata/xlat/xlat_parser.y
+            DEPENDS ${LEMON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/gamedata/xlat/xlat_parser.y )
+
+    add_custom_command( OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/zcc-parse.c ${CMAKE_CURRENT_BINARY_DIR}/zcc-parse.h
+            COMMAND ${LEMON_EXECUTABLE} -C${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common/scripting/frontend/zcc-parse.lemon
+            DEPENDS ${LEMON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/common/scripting/frontend/zcc-parse.lemon )
+
+    add_custom_command( OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sc_man_scanner.h
+            COMMAND ${RE2C_EXECUTABLE} --no-generation-date -s -o ${CMAKE_CURRENT_BINARY_DIR}/sc_man_scanner.h ${CMAKE_CURRENT_SOURCE_DIR}/common/engine/sc_man_scanner.re
+            DEPENDS ${RE2C_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/common/engine/sc_man_scanner.re )
+endif ()
 
 include_directories( ${CMAKE_CURRENT_BINARY_DIR} )
 
@@ -1272,11 +1311,14 @@ set( GAME_SOURCES
 set( GAME_NONPCH_SOURCES ${GAME_SOURCES} )
 list( REMOVE_ITEM GAME_NONPCH_SOURCES ${PCH_SOURCES} )
 
-add_executable( zdoom WIN32 MACOSX_BUNDLE ${GAME_SOURCES} )
+if (NOT ANDROID)
+    add_executable( zdoom WIN32 MACOSX_BUNDLE ${GAME_SOURCES} )
+    target_precompile_headers( zdoom PRIVATE g_pch.h )
+else ()
+    add_library(zdoom SHARED ${GAME_SOURCES})
+endif ()
 
 target_include_directories( zdoom PRIVATE ${CMAKE_BINARY_DIR} )
-
-target_precompile_headers( zdoom PRIVATE g_pch.h )
 
 set_source_files_properties( ${FASTMATH_SOURCES} PROPERTIES COMPILE_FLAGS ${ZD_FASTMATH_FLAG} )
 set_source_files_properties( xlat/parse_xlat.cpp PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/xlat_parser.c" )
@@ -1369,7 +1411,9 @@ include_directories(
 	${SYSTEM_SOURCES_DIR}
 )
 
-add_dependencies( zdoom revision_check )
+if (NOT ANDROID)
+    add_dependencies( zdoom revision_check )
+endif ()
 
 set_target_properties( zdoom PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${ZDOOM_OUTPUT_DIR} )
 set_target_properties( zdoom PROPERTIES OUTPUT_NAME ${ZDOOM_EXE_NAME} )
@@ -1397,7 +1441,7 @@ if( MSVC )
 
 endif()
 
-if( NOT WIN32 AND NOT APPLE )
+if( NOT WIN32 AND NOT APPLE AND NOT ANDROID)
 	FILE( WRITE ${CMAKE_CURRENT_BINARY_DIR}/link-make "if [ ! -e ${ZDOOM_OUTPUT_DIR}/${ZDOOM_EXE_NAME} ]; then ln -sf ${CMAKE_CURRENT_BINARY_DIR}/${ZDOOM_EXE_NAME} ${ZDOOM_OUTPUT_DIR}/${ZDOOM_EXE_NAME}; fi" )
 	add_custom_command( TARGET zdoom POST_BUILD
 		COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/link-make
@@ -1411,6 +1455,7 @@ if( NOT WIN32 AND NOT APPLE )
 	endif()
 endif()
 
+if( NOT ANDROID )
 add_custom_command(TARGET zdoom POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
 	${CMAKE_SOURCE_DIR}/soundfont/uzdoom.sf2 $<TARGET_FILE_DIR:zdoom>/soundfonts/uzdoom.sf2
@@ -1419,6 +1464,7 @@ add_custom_command(TARGET zdoom POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different
 	${CMAKE_SOURCE_DIR}/fm_banks/gs-by-papiezak-and-sneakernets.wopn $<TARGET_FILE_DIR:zdoom>/fm_banks/gs-by-papiezak-and-sneakernets.wopn
 )
+endif ()
 
 if ( NOT ZMUSIC_SYSTEM_INSTALL AND (NOT DEFINED BUILD_SHARED_LIBS OR BUILD_SHARED_LIBS))
 	# bring zmusic in

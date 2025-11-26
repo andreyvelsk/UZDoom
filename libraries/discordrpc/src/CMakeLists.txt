@@ -70,7 +70,9 @@ if(UNIX)
     endif(APPLE)
 
     add_library(discord-rpc ${BASE_RPC_SRC})
-    target_link_libraries(discord-rpc PUBLIC pthread)
+    if (NOT ANDROID)
+        target_link_libraries(discord-rpc PUBLIC pthread)
+    endif()
 
     target_compile_options(discord-rpc PRIVATE
         -Wall

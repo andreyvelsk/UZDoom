@@ -6,10 +6,12 @@
 **
 ** SPDX-License-Identifier: Apache-2.0
 */
-
 #include "vk_platform.h"
 #include "vulkan_core.h"
 
+#ifdef ANDROID
+#include "vulkan_android.h"
+#else
 #ifdef VK_USE_PLATFORM_ANDROID_KHR
 #include "vulkan_android.h"
 #endif
@@ -95,5 +97,5 @@
 #ifdef VK_ENABLE_BETA_EXTENSIONS
 #include "vulkan_beta.h"
 #endif
-
+#endif
 #endif // VULKAN_H_

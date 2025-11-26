@@ -105,7 +105,9 @@ struct particle_t
 	// float padding2; //+4 = 136
 };
 
+#ifndef ANDROID
 static_assert(sizeof(particle_t) == 136, "Only LP64/LLP64 is supported");
+#endif
 
 const uint16_t NO_PARTICLE = 0xffff;
 

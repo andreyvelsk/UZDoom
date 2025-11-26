@@ -48,18 +48,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
-find_package(Python3 3.6 REQUIRED)
 
-list( APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake )
+if (NOT ANDROID)
+    find_package(Python3 3.6 REQUIRED)
+    list( APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake )
+else ()
+    add_compile_options(-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES)
+    set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
+endif ()
 include( FindPackageHandleStandardArgs )
 
-# Support cross compiling
-option( FORCE_CROSSCOMPILE "Turn on cross compiling." NO )
+
+if (NOT ANDROID)
+    option( FORCE_CROSSCOMPILE "Turn on cross compiling." YES )
+else ()
+    option( FORCE_CROSSCOMPILE "Turn on cross compiling." NO )
+    set( CMAKE_CROSSCOMPILING TRUE )
+endif ()
+
 if( FORCE_CROSSCOMPILE )
 	set( CMAKE_CROSSCOMPILING TRUE )
 endif()
 
-if(CMAKE_CROSSCOMPILING)
+if(CMAKE_CROSSCOMPILING AND NOT ANDROID)
 	set(IMPORT_EXECUTABLES "IMPORTFILE-NOTFOUND" CACHE FILEPATH "Export file from native build.")
 	include(${IMPORT_EXECUTABLES})
 endif()
@@ -87,6 +98,7 @@ if( PK3_QUIET_ZIPDIR )
 	set( PK3_ZIPDIR_OPTIONS "-q" )
 endif()
 
+if (NOT ANDROID)
 # Simplify pk3 building, add_pk3(filename srcdirectory)
 function( add_pk3 PK3_NAME PK3_DIR )
 	# Generate target name. Just use "pk3" for main pk3 target.
@@ -154,6 +166,7 @@ function( add_pk3 PK3_NAME PK3_DIR )
 		DESTINATION ${INSTALL_PK3_PATH}
 		COMPONENT "Game resources")
 endfunction()
+endif ()
 
 macro( generate_language_files target source destination )
 	# right now, this dumps temp files into the source tree and deletes them after build
@@ -246,13 +259,17 @@ if (NOT FORCE_INTERNAL_ZMUSIC)
 	find_package( ZMusic )
 endif()
 
+if (NOT ANDROID)
 include( TargetArch )
-
 target_architecture(TARGET_ARCHITECTURE)
-
 if( ${TARGET_ARCHITECTURE} MATCHES "x86_64" )
-	set( HAVE_VM_JIT ON )
+    set( HAVE_VM_JIT ON )
 endif()
+else ()
+    if( ${ANDROID_ABI} STREQUAL "x86_64" )
+        set( HAVE_VM_JIT ON )
+    endif ()
+endif ()
 
 option (HAVE_VULKAN "Enable Vulkan support" ON)
 if( APPLE )
@@ -415,7 +432,7 @@ if( ${HAVE_VM_JIT} )
 	endif()
 endif()
 
-if( BZIP2_FOUND AND NOT FORCE_INTERNAL_BZIP2 )
+if( BZIP2_FOUND AND NOT FORCE_INTERNAL_BZIP2 AND NOT ANDROID)
 	message( STATUS "Using system bzip2 library, includes found at ${BZIP2_INCLUDE_DIR}" )
 else()
 	message( STATUS "Using internal bzip2 library" )
@@ -437,7 +454,7 @@ else()
 endif()
 
 # ZMUSIC
-if( ZMUSIC_FOUND AND NOT FORCE_INTERNAL_ZMUSIC )
+if( (ZMUSIC_FOUND AND NOT FORCE_INTERNAL_ZMUSIC) OR ANDROID )
 	message( STATUS "Using system zmusic library, includes found at ${ZMUSIC_INCLUDE_DIR}" )
 	set( ZMUSIC_SYSTEM_INSTALL TRUE )
 else()

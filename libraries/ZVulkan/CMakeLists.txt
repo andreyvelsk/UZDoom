@@ -199,7 +199,9 @@ else()
 
 	list(APPEND ZVULKAN_SOURCES ${ZVULKAN_UNIX_SOURCES})
 	add_definitions(-DUNIX -D_UNIX)
-	add_link_options(-pthread)
+    if (NOT ANDROID)
+    	add_link_options(-pthread)
+    endif ()
 endif()
 
 if(MSVC)
