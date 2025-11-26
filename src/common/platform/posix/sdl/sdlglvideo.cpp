@@ -168,7 +168,7 @@ namespace Priv
 		int xWindowPos = (win_x <= 0) ? SDL_WINDOWPOS_CENTERED_DISPLAY(vid_adapter) : win_x;
 		int yWindowPos = (win_y <= 0) ? SDL_WINDOWPOS_CENTERED_DISPLAY(vid_adapter) : win_y;
 		Printf("Creating window [%dx%d] on adapter %d\n", (*win_w), (*win_h), (*vid_adapter));
-		
+
 		FString caption;
 		caption.Format(GAMENAME " %s (%s)", GetVersionString(), GetGitTime());
 
@@ -296,7 +296,7 @@ public:
 	~SDLVideo ();
 
 	void DumpAdapters();
-	
+
 	DFrameBuffer *CreateFrameBuffer ();
 
 private:
@@ -404,7 +404,7 @@ DFrameBuffer *SDLVideo::CreateFrameBuffer ()
 				builder.RequireExtension(names[i]);
 			auto instance = builder.Create();
 
-			VkSurfaceKHR surfacehandle = nullptr;
+			VkSurfaceKHR surfacehandle = VK_NULL_HANDLE;
 			if (!I_CreateVulkanSurface(instance->Instance, &surfacehandle))
 				VulkanError("I_CreateVulkanSurface failed");
 
@@ -528,7 +528,7 @@ void SystemBaseFrameBuffer::SetWindowSize(int w, int h)
 		SDL_GetWindowPosition(Priv::window, &x, &y);
 		win_x = x;
 		win_y = y;
-		
+
 	}
 }
 

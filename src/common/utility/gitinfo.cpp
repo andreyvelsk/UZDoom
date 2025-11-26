@@ -34,8 +34,30 @@
 ** file needs to be recompiled.
 */
 
-#include "gitinfo.h"
 #include "version.h"
+
+#if ANDROID
+const char *GetGitDescription()
+{
+    return "";
+}
+
+const char *GetGitHash()
+{
+    return "";
+}
+
+const char *GetGitTime()
+{
+    return "";
+}
+
+const char *GetVersionString()
+{
+    return VERSIONSTR;
+}
+#else
+#include "gitinfo.h"
 
 const char *GetGitDescription()
 {
@@ -63,3 +85,4 @@ const char *GetVersionString()
 		return GIT_DESCRIPTION;
 	}
 }
+#endif

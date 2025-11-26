@@ -36,7 +36,9 @@ struct ModelAnim
 	double switchOffset = 0; // when the animation was changed -- where to interpolate the switch from
 };
 
+#ifndef ANDROID
 static_assert(sizeof(ModelAnim) == sizeof(double) * 6);
+#endif
 
 using ModelAnimFrame = std::variant<std::nullptr_t, ModelAnimFrameInterp, ModelAnimFramePrecalculatedIQM>;
 

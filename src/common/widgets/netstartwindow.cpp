@@ -6,6 +6,7 @@
 #include <zwidget/core/timer.h>
 #include <zwidget/widgets/textlabel/textlabel.h>
 #include <zwidget/widgets/pushbutton/pushbutton.h>
+#include "zstring.h"
 
 NetStartWindow* NetStartWindow::Instance = nullptr;
 

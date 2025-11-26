@@ -91,7 +91,7 @@
 #include "screenjob.h"
 #include "i_interface.h"
 #include "fs_findfile.h"
-
+#include <miniz.h>
 
 static FRandom pr_dmspawn ("DMSpawn");
 static FRandom pr_pspawn ("PlayerSpawn");

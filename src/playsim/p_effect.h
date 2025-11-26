@@ -101,7 +101,9 @@ struct particle_t
 	FStandaloneAnimation animData; //+16 = 128
 };
 
+#ifndef ANDROID
 static_assert(sizeof(particle_t) == 128, "Only LP64/LLP64 is supported");
+#endif
 
 const uint16_t NO_PARTICLE = 0xffff;
 

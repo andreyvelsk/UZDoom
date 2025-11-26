@@ -2,6 +2,7 @@
 
 #include <zwidget/core/widget.h>
 #include "gstrings.h"
+#include "zstring.h"
 
 #define RENDER_BACKENDS
 

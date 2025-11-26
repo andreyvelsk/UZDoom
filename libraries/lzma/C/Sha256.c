@@ -37,7 +37,7 @@ This code is based on public domain code from Wei Dai's Crypto++ library. */
     #if _MSC_VER >= 1910
       #define Z7_COMPILER_SHA256_SUPPORTED
     #endif
-  #elif defined(__clang__)
+  #elif defined(__clang__) && defined(__aarch64__)
     #if (__clang_major__ >= 8) // fix that check
       #define Z7_COMPILER_SHA256_SUPPORTED
     #endif
@@ -65,7 +65,7 @@ void Z7_FASTCALL Sha256_UpdateBlocks(UInt32 state[8], const Byte *data, size_t n
 BoolInt Sha256_SetFunction(CSha256 *p, unsigned algo)
 {
   SHA256_FUNC_UPDATE_BLOCKS func = Sha256_UpdateBlocks;
-  
+
   #ifdef Z7_COMPILER_SHA256_SUPPORTED
     if (algo != SHA256_ALGO_SW)
     {
@@ -270,7 +270,7 @@ void Z7_FASTCALL Sha256_UpdateBlocks(UInt32 state[8], const Byte *data, size_t n
   #if !defined(Z7_SHA256_UNROLL) || (STEP_MAIN <= 4) || (STEP_PRE <= 4)
   UInt32 tmp;
   #endif
-  
+
   a = state[0];
   b = state[1];
   c = state[2];
@@ -306,7 +306,7 @@ void Z7_FASTCALL Sha256_UpdateBlocks(UInt32 state[8], const Byte *data, size_t n
       R1_PRE(3)
       #endif
       #endif
-    
+
     #endif
   }
 
@@ -324,7 +324,7 @@ void Z7_FASTCALL Sha256_UpdateBlocks(UInt32 state[8], const Byte *data, size_t n
       #endif
 
     #else
-      
+
       R1_MAIN(0)
       #if STEP_MAIN >= 2
       R1_MAIN(1)
@@ -378,16 +378,16 @@ void Sha256_Update(CSha256 *p, const Byte *data, size_t size)
   {
     unsigned pos = (unsigned)p->count & 0x3F;
     unsigned num;
-    
+
     p->count += size;
-    
+
     num = 64 - pos;
     if (num > size)
     {
       memcpy(p->buffer + pos, data, size);
       return;
     }
-    
+
     if (pos != 0)
     {
       size -= num;
@@ -412,9 +412,9 @@ void Sha256_Final(CSha256 *p, Byte *digest)
 {
   unsigned pos = (unsigned)p->count & 0x3F;
   unsigned i;
-  
+
   p->buffer[pos++] = 0x80;
-  
+
   if (pos > (64 - 8))
   {
     while (pos != 64) { p->buffer[pos++] = 0; }
@@ -445,7 +445,7 @@ void Sha256_Final(CSha256 *p, Byte *digest)
     SetBe32(p->buffer + 64 - 8, (UInt32)(numBits >> 32))
     SetBe32(p->buffer + 64 - 4, (UInt32)(numBits))
   }
-  
+
   Sha256_UpdateBlock(p);
 
   for (i = 0; i < 8; i += 2)
@@ -456,7 +456,7 @@ void Sha256_Final(CSha256 *p, Byte *digest)
     SetBe32(digest + 4, v1)
     digest += 8;
   }
-  
+
   Sha256_InitState(p);
 }
 
