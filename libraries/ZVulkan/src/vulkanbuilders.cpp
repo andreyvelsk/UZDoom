@@ -98,6 +98,15 @@ static const TBuiltInResource DefaultTBuiltInResource = {
 	/* .maxTaskWorkGroupSizeY_NV = */ 1,
 	/* .maxTaskWorkGroupSizeZ_NV = */ 1,
 	/* .maxMeshViewCountNV = */ 4,
+                       1,
+                       1,
+                       1,
+                       1,
+                       1,
+                       1,
+                       1,
+                       1,
+                       1,
 	/* .maxDualSourceDrawBuffersEXT = */ 1,
 
 	/* .limits = */ {

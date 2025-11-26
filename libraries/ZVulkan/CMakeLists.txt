@@ -87,7 +87,6 @@ set(ZVULKAN_SOURCES
 	src/glslang/glslang/OSDependent/osinclude.h
 	src/glslang/spirv/Logger.h
 	src/glslang/spirv/GlslangToSpv.cpp
-	src/glslang/spirv/SPVRemapper.h
 	src/glslang/spirv/GLSL.ext.EXT.h
 	src/glslang/spirv/hex_float.h
 	src/glslang/spirv/doc.cpp
@@ -97,7 +96,6 @@ set(ZVULKAN_SOURCES
 	src/glslang/spirv/InReadableOrder.cpp
 	src/glslang/spirv/GLSL.ext.AMD.h
 	src/glslang/spirv/GLSL.ext.NV.h
-	src/glslang/spirv/SPVRemapper.cpp
 	src/glslang/spirv/SpvBuilder.h
 	src/glslang/spirv/GLSL.ext.KHR.h
 	src/glslang/spirv/disassemble.h
@@ -110,8 +108,6 @@ set(ZVULKAN_SOURCES
 	src/glslang/spirv/SpvTools.h
 	src/glslang/spirv/GLSL.std.450.h
 	src/glslang/spirv/NonSemanticDebugPrintf.h
-	src/glslang/OGLCompilersDLL/InitializeDll.cpp
-	src/glslang/OGLCompilersDLL/InitializeDll.h
 )
 
 set(ZVULKAN_INCLUDES
