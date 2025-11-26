@@ -65,6 +65,7 @@
 #include "vulkan/system/vk_buffer.h"
 #include "engineerrors.h"
 #include "c_dispatch.h"
+#include <SDL2/SDL_vulkan.h>
 
 FString JitCaptureStackTrace(int framesToSkip, bool includeNativeFrames, int maxFrames = -1);
 
@@ -121,8 +122,8 @@ void VulkanPrintLog(const char* typestr, const std::string& msg)
 	}
 }
 
-VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::shared_ptr<VulkanSurface> surface) :
-	Super(hMonitor, fullscreen) 
+VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, VulkanSurface *surface,SDL_Window *window) :
+	Super(hMonitor, fullscreen)
 {
 	VulkanDeviceBuilder builder;
 	builder.OptionalRayQuery();
@@ -130,6 +131,25 @@ VulkanRenderDevice::VulkanRenderDevice(void *hMonitor, bool fullscreen, std::sha
 	builder.SelectDevice(vk_device);
 	SupportedDevices = builder.FindDevices(surface->Instance);
 	device = builder.Create(surface->Instance);
+    this->surface = surface;
+    this->window = window;
+}
+
+void VulkanRenderDevice::RecreateSurface(){
+
+    if (!this->surface && !this->window){
+        return;
+    }
+
+    if (this->surface && this->surface->Surface) {
+        vkDestroySurfaceKHR(this->surface->Instance->Instance, this->surface->Surface, nullptr);
+    }
+
+    this->surface->Surface = VK_NULL_HANDLE;
+
+    if (!SDL_Vulkan_CreateSurface(this->window,surface->Instance->Instance, &this->surface->Surface)) {
+        I_FatalError("Failed to recreate vulkan window surface!");
+    }
 }
 
 VulkanRenderDevice::~VulkanRenderDevice()

@@ -47,7 +47,7 @@ public:
 
 	unsigned int GetLightBufferBlockSize() const;
 
-	VulkanRenderDevice(void *hMonitor, bool fullscreen, std::shared_ptr<VulkanSurface> surface);
+	VulkanRenderDevice(void *hMonitor, bool fullscreen,  VulkanSurface *surface,SDL_Window *window);
 	~VulkanRenderDevice();
 	bool IsVulkan() override { return true; }
 
@@ -93,6 +93,8 @@ public:
 
 	bool RaytracingEnabled();
 
+    void RecreateSurface();
+
 private:
 	void RenderTextureView(FCanvasTexture* tex, std::function<void(IntRect &)> renderFunc) override;
 	void PrintStartupLog();
@@ -115,6 +117,8 @@ private:
 	VkRenderBuffers *mActiveRenderBuffers = nullptr;
 
 	bool mVSync = false;
+    VulkanSurface *surface;
+    SDL_Window *window;
 };
 
 class CVulkanError : public CEngineError

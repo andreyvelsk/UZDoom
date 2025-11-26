@@ -1,4 +1,4 @@
-// 
+//
 //---------------------------------------------------------------------------
 //
 // Copyright(C) 2018 Christoph Oelckers
@@ -122,6 +122,9 @@ void HWViewpointBuffer::Clear()
 	bool needNewPipeline = mUploadIndex > 0; // Clear might be called multiple times before any actual rendering
 
 	mUploadIndex = 0;
+#ifdef ANDROID
+    mLastMappedIndex = UINT_MAX;
+#endif
 	mClipPlaneInfo.Clear();
 
 	if (needNewPipeline)

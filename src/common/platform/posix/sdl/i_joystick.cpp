@@ -326,8 +326,20 @@ static SDLInputJoystickManager *JoystickManager;
 void I_StartupJoysticks()
 {
 #ifndef NO_SDL_JOYSTICK
-	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) >= 0)
-		JoystickManager = new SDLInputJoystickManager();
+#ifdef ANDROID
+    SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+#endif
+	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK) >= 0){
+#ifdef ANDROID
+        const auto *pathToSdl2ControllerDb = getenv("PATH_TO_SDL2_CONTROLLER_DB");
+        if (SDL_GameControllerAddMappingsFromFile(pathToSdl2ControllerDb) < 0) {
+            SDL_Log("Couldn't load mappings: %s\n", SDL_GetError());
+        } else{
+            SDL_Log("Custom controller db was loaded from: %s", pathToSdl2ControllerDb);
+        }
+#endif
+        JoystickManager = new SDLInputJoystickManager();
+    }
 #endif
 }
 void I_ShutdownInput()

@@ -21,6 +21,14 @@ void VulkanSwapChain::Create(int width, int height, int imageCount, bool vsync, 
 	views.clear();
 	images.clear();
 
+#ifdef ANDROID
+    CreateSwapchain(width, height, imageCount, vsync, hdr, true);
+    if (lost)
+    {
+        // We could not acquire exclusive fullscreen. Fall back to normal fullsceen instead.
+        CreateSwapchain(width, height, imageCount, vsync, hdr, false);
+    }
+#else
 	CreateSwapchain(width, height, imageCount, vsync, hdr, exclusivefullscreen);
 
 	if (exclusivefullscreen && lost)
@@ -28,7 +36,7 @@ void VulkanSwapChain::Create(int width, int height, int imageCount, bool vsync, 
 		// We could not acquire exclusive fullscreen. Fall back to normal fullsceen instead.
 		CreateSwapchain(width, height, imageCount, vsync, hdr, false);
 	}
-
+#endif
 	if (swapchain)
 	{
 		uint32_t imageCount;
@@ -178,8 +186,9 @@ bool VulkanSwapChain::CreateSwapchain(int width, int height, int imageCount, boo
 		swapChainCreateInfo.queueFamilyIndexCount = 0;
 		swapChainCreateInfo.pQueueFamilyIndices = nullptr;
 	}
-
+#ifndef ANDROID
 	swapChainCreateInfo.preTransform = caps.Capabilites.currentTransform;
+#endif
 	swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // If alpha channel is passed on to the DWM or not
 	swapChainCreateInfo.presentMode = presentMode;
 	swapChainCreateInfo.clipped = VK_TRUE; // Applications SHOULD set this value to VK_TRUE if they do not expect to read back the content of presentable images before presenting them or after reacquiring them, and if their fragment shaders do not have any side effects that require them to run for all pixels in the presentable image
@@ -227,7 +236,11 @@ int VulkanSwapChain::AcquireImage(VulkanSemaphore* semaphore, VulkanFence* fence
 		return -1;
 
 	uint32_t imageIndex;
+#ifdef ANDROID
+	VkResult result = vkAcquireNextImageKHR(device->device, swapchain, UINT64_MAX, semaphore ? semaphore->semaphore : VK_NULL_HANDLE, fence ? fence->fence : VK_NULL_HANDLE, &imageIndex);
+#else
 	VkResult result = vkAcquireNextImageKHR(device->device, swapchain, 1'000'000'000, semaphore ? semaphore->semaphore : VK_NULL_HANDLE, fence ? fence->fence : VK_NULL_HANDLE, &imageIndex);
+#endif
 	if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)
 	{
 		return imageIndex;
@@ -405,7 +418,7 @@ VulkanSurfaceCapabilities VulkanSwapChain::GetSurfaceCapabilities(bool exclusive
 		VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR(device->PhysicalDevice.Device, device->Surface->Surface, &surfaceFormatCount, nullptr);
 		if (result != VK_SUCCESS)
 			VulkanError("vkGetPhysicalDeviceSurfaceFormatsKHR failed");
-		
+
 		if (surfaceFormatCount > 0)
 		{
 			caps.Formats.resize(surfaceFormatCount);

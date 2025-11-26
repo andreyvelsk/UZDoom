@@ -69,6 +69,14 @@
 DEFGETPATH(Config, "XDG_CONFIG_HOME", "$HOME/config/settings");
 DEFGETPATH(Cache, "XDG_CACHE_HOME", "$HOME/config/cache");
 DEFGETPATH(Data, "XDG_DATA_HOME", "$HOME/config/non-packaged/data");
+#elif ANDROID
+static std::string pathToZDoomUserFolder = getenv("PATH_TO_UZDOOM_USER_FOLDER");
+static std::string pathToConfigFolder = pathToZDoomUserFolder + "/config";
+static std::string pathToCacheFolder = pathToZDoomUserFolder + "/cache";
+static std::string pathToShareFolder = pathToZDoomUserFolder +"/share";
+DEFGETPATH(Config, "XDG_CONFIG_HOME", pathToConfigFolder.c_str());
+DEFGETPATH(Cache, "XDG_CACHE_HOME", pathToCacheFolder.c_str());
+DEFGETPATH(Data, "XDG_DATA_HOME", pathToShareFolder.c_str());
 #else
 DEFGETPATH(Config, "XDG_CONFIG_HOME", "$HOME/.config");
 DEFGETPATH(Cache, "XDG_CACHE_HOME", "$HOME/.cache");
