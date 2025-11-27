@@ -223,6 +223,8 @@ int main (int argc, char **argv)
 }
 
 #ifdef ANDROID
+#include "menustate.h"
+
 extern "C"{
 void resumeSound() {
 }
@@ -231,11 +233,11 @@ void pauseSound() {
 }
 
 bool needToShowScreenControls() {
-    return true;
+    return menuactive == MENU_Off || menuactive == MENU_OnNoPause;
 }
 
 bool needToInvokeMouseButtonsEvents(){
-    return false;
+    return menuactive == MENU_On || menuactive == MENU_WaitKey;
 }
 }
 #endif
