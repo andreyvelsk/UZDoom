@@ -206,7 +206,7 @@ FString M_GetConfigPath(bool for_reading)
 
 FString M_GetDocumentsPath()
 {
-#ifdef __HAIKU__
+#if __HAIKU__ || ANDROID
 	return FStringf("%s/" GAMENAMELOWERCASE "/", GetConfigPath());
 #else
 	return M_GetAppDataPath(false) + "/";
@@ -224,7 +224,7 @@ FString M_GetDocumentsPath()
 
 FString M_GetScreenshotsPath()
 {
-#ifdef __HAIKU__
+#if __HAIKU__ || ANDROID
 	static FString path = M_GetDocumentsPath() + "screenshots";
 #else
 	static FString path = FStringf("%s/Screenshots/" GAMENAME, GetPicturesPath());
