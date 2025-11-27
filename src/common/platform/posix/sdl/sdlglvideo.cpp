@@ -700,17 +700,13 @@ void ProcessSDLWindowEvent(const SDL_WindowEvent &event)
 	extern bool AppActive;
 
 	case SDL_WINDOWEVENT_FOCUS_GAINED:
-#ifndef ANDROID
 		S_SetSoundPaused(1);
 		AppActive = true;
-#endif
 		break;
 
 	case SDL_WINDOWEVENT_FOCUS_LOST:
-#ifndef ANDROID
 		S_SetSoundPaused(0);
 		AppActive = false;
-#endif
 		break;
 
 	case SDL_WINDOWEVENT_MOVED:
