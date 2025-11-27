@@ -223,11 +223,18 @@ int main (int argc, char **argv)
 }
 
 #ifdef ANDROID
+extern void S_SetSoundPaused(int state);
+extern bool AppActive;
+
 extern "C"{
 void resumeSound() {
+    S_SetSoundPaused(1);
+    AppActive = true;
 }
 
 void pauseSound() {
+    S_SetSoundPaused(0);
+    AppActive = false;
 }
 
 bool needToShowScreenControls() {
