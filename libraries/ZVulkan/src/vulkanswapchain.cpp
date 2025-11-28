@@ -189,7 +189,7 @@ bool VulkanSwapChain::CreateSwapchain(int width, int height, int imageCount, boo
 #ifndef ANDROID
 	swapChainCreateInfo.preTransform = caps.Capabilites.currentTransform;
 #else
-    caps.Capabilites.currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    swapChainCreateInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 #endif
 	swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // If alpha channel is passed on to the DWM or not
 	swapChainCreateInfo.presentMode = presentMode;
