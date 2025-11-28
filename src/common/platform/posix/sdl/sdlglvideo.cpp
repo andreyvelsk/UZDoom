@@ -724,11 +724,13 @@ void ProcessSDLWindowEvent(const SDL_WindowEvent &event)
 		break;
 
 	case SDL_WINDOWEVENT_RESIZED:
+#ifndef ANDROID
 		if (!vid_fullscreen && !Priv::fullscreenSwitch)
 		{
 			win_w = event.data1;
 			win_h = event.data2;
 		}
+#endif
 		break;
 
 	case SDL_WINDOWEVENT_MAXIMIZED:
