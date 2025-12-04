@@ -838,6 +838,7 @@ set (PCH_SOURCES
 	d_net.cpp
 	d_netinfo.cpp
 	d_protocol.cpp
+	d_steam.cpp
 	doomstat.cpp
 	g_cvars.cpp
 	g_dumpinfo.cpp
