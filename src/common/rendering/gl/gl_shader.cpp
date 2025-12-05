@@ -42,7 +42,6 @@
 #include "i_specialpaths.h"
 #include "printf.h"
 #include "version.h"
-#include "stb_include.h"
 
 #include "gl_interface.h"
 #include "gl_debug.h"
@@ -529,33 +528,10 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 
 		if (*proc_prog_lump != '#')
 		{
-			FString lump_filename(proc_prog_lump);
-			FString pp_data;
-			int pp_lump = fileSystem.CheckNumForFullName(proc_prog_lump, 0);	// if it's a core shader, ignore overrides by user mods.
-			if (pp_lump == -1)
-			{
-				pp_lump = fileSystem.CheckNumForFullName(proc_prog_lump);
-				if (pp_lump == -1)
-				{
-					I_Error("Unable to load '%s'", proc_prog_lump);
-				}
-				else
-				{
-					FString error = "";
-
-					pp_data = stb_include_string(GetStringFromLump(pp_lump), lump_filename, filenames_for_error, error);
-
-					if(!error.IsEmpty())
-					{
-						I_Error("Unable to load '%s': %s", proc_prog_lump, error.GetChars());
-					}
-				}
-			}
-			else
-			{ // skip includes processing for code shaders
-				pp_data = GetStringFromLump(pp_lump);
-				filenames_for_error.Push(lump_filename);
-			}
+            int pp_lump = fileSystem.CheckNumForFullName(proc_prog_lump, 0);
+            if (pp_lump == -1) pp_lump = fileSystem.CheckNumForFullName(proc_prog_lump);
+            if (pp_lump == -1) I_Error("Unable to load '%s'", proc_prog_lump);
+            FString pp_data = GetStringFromLump(pp_lump);
 
 			if (pp_data.IndexOf("ProcessMaterial") < 0 && pp_data.IndexOf("SetupMaterial") < 0)
 			{
