@@ -65,6 +65,7 @@
 #include "g_input.h"
 #include "c_commandbuffer.h"
 #include "vm.h"
+#include "SDL_log.h"
 
 #define LEFTMARGIN 8
 #define RIGHTMARGIN 8
@@ -416,6 +417,11 @@ int PrintString (int iprintlevel, const char *outline)
 		return 0;
 
 	if (!conbuffer) return 0;	// when called too early
+
+#ifdef ANDROID
+    SDL_Log("%s", outline);
+#endif
+
 	int printlevel = iprintlevel & PRINT_TYPES;
 	if (*outline == '\0')
 	{
