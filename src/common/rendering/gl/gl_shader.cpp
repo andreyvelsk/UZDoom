@@ -54,7 +54,7 @@
 EXTERN_CVAR(Bool, r_skipmats)
 #ifdef ANDROID
 EXTERN_CVAR(Bool, gl_customshader)
-CVAR(Bool, gl_lite_shader, false, 0);
+extern bool gl_lite_shader;
 #endif
 
 
@@ -981,7 +981,7 @@ bool FShaderCollection::CompileNextShader()
 		{
 			mCompileIndex = 0;
 			mCompileState++;
-#ifdef __MOBILE__
+#ifdef ANDROID
 			if (usershaders.Size() == 0 || !gl_customshader) mCompileState++;
 #else
 			if (usershaders.Size() == 0) mCompileState++;

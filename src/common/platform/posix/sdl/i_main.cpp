@@ -214,7 +214,13 @@ int main (int argc, char **argv)
 #ifdef ANDROID
 #include "menustate.h"
 
+bool gl_lite_shader = false;
+
 extern "C"{
+void UpdateGLLiteShaderState (bool enableGLLiteShader){
+    gl_lite_shader = enableGLLiteShader;
+}
+
 void resumeSound() {
 }
 
