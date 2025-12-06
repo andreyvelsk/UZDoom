@@ -708,7 +708,9 @@ bool PInt::ReadValue(FSerializer &ar, const char *key, void *addr) const
 
 void PInt::SetValue(void *addr, int val)
 {
-	assert(((intptr_t)addr & (Align - 1)) == 0 && "unaligned address");
+#ifndef ANDROID
+	assert(((uintptr_t)addr & (Align - 1)) == 0 && "unaligned address");
+#endif
 	if (Size == 4)
 	{
 		*(int *)addr = val;
@@ -744,7 +746,9 @@ void PInt::SetValue(void *addr, double val)
 
 int PInt::GetValueInt(void *addr) const
 {
+#ifndef ANDROID
 	assert(((intptr_t)addr & (Align - 1)) == 0 && "unaligned address");
+#endif
 	if (Size == 4)
 	{
 		return *(int *)addr;
@@ -1006,7 +1010,9 @@ void PFloat::SetValue(void *addr, int val)
 
 void PFloat::SetValue(void *addr, double val)
 {
-	assert(((intptr_t)addr & (Align - 1)) == 0 && "unaligned address");
+#ifndef ANDROID
+	assert(((uintptr_t)addr & (Align - 1)) == 0 && "unaligned address");
+#endif
 	if (Size == 4)
 	{
 		*(float *)addr = (float)val;
@@ -1037,7 +1043,9 @@ int PFloat::GetValueInt(void *addr) const
 
 double PFloat::GetValueFloat(void *addr) const
 {
-	assert(((intptr_t)addr & (Align - 1)) == 0 && "unaligned address");
+#ifndef ANDROID
+	assert(((uintptr_t)addr & (Align - 1)) == 0 && "unaligned address");
+#endif
 	if (Size == 4)
 	{
 		return *(float *)addr;
