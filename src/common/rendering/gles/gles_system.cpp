@@ -81,6 +81,9 @@ static void* LoadGLES2Proc(const char* name)
 
 static TArray<FString>  m_Extensions;
 
+#ifdef __ANDROID__ //karin: force GL version
+extern float GLimp_GetGLVersion(void);
+#endif
 
 static void CollectExtensions()
 {
@@ -165,6 +168,9 @@ namespace OpenGLESRenderer
 
 		Printf("GL Version parsed = %f\n", glVersion);
 
+#ifdef __ANDROID__ //karin: force GL version
+        glVersion = GLimp_GetGLVersion();
+#endif
 		gles.flags = RFL_NO_CLIP_PLANES;
 
 		gles.useMappedBuffers = gles_use_mapped_buffer;

@@ -56,8 +56,8 @@
 #endif
 
 #if ANDROID
-int harm_gl_version;
-int harm_gl_es;
+int harm_gl_version = 450;
+int harm_gl_es = 4;
 #endif
 
 #ifdef HAVE_VULKAN
@@ -265,13 +265,8 @@ namespace Priv
                 SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
             }
         } else {
-            if (USING_GLES_3) {
-                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-            } else {
-                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-                SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-            }
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
         }
 #endif
 	}
