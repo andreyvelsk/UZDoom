@@ -700,8 +700,8 @@ void ProcessSDLWindowEvent(const SDL_WindowEvent &event)
 	switch (event.event)
 	{
 	extern bool AppActive;
-
-	case SDL_WINDOWEVENT_FOCUS_GAINED:
+#ifndef ANDROID
+        case SDL_WINDOWEVENT_FOCUS_GAINED:
 		S_SetSoundPaused(1);
 		AppActive = true;
 		break;
@@ -712,7 +712,6 @@ void ProcessSDLWindowEvent(const SDL_WindowEvent &event)
 		break;
 
 	case SDL_WINDOWEVENT_MOVED:
-#ifndef ANDROID
 		if (!vid_fullscreen)
 		{
 			int top = 0, left = 0;
@@ -720,19 +719,16 @@ void ProcessSDLWindowEvent(const SDL_WindowEvent &event)
 			win_x = event.data1-left;
 			win_y = event.data2-top;
 		}
-#endif
 		break;
 
 	case SDL_WINDOWEVENT_RESIZED:
-#ifndef ANDROID
 		if (!vid_fullscreen && !Priv::fullscreenSwitch)
 		{
 			win_w = event.data1;
 			win_h = event.data2;
 		}
-#endif
 		break;
-
+#endif
 	case SDL_WINDOWEVENT_MAXIMIZED:
 		win_maximized = true;
 		break;

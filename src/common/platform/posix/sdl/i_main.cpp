@@ -213,7 +213,8 @@ int main (int argc, char **argv)
 
 #ifdef ANDROID
 #include "menustate.h"
-
+#include "i_soundinternal.h"
+extern bool AppActive;
 bool gl_lite_shader = false;
 
 extern "C"{
@@ -222,9 +223,13 @@ void UpdateGLLiteShaderState (bool enableGLLiteShader){
 }
 
 void resumeSound() {
+    S_SetSoundPaused(1);
+    AppActive = true;
 }
 
 void pauseSound() {
+    S_SetSoundPaused(0);
+    AppActive = false;
 }
 
 bool needToShowScreenControls() {
