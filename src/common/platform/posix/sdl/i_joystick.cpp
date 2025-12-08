@@ -286,14 +286,7 @@ class SDLInputJoystickManager
 public:
 	SDLInputJoystickManager()
 	{
-		for(int i = 0;i < SDL_NumJoysticks();i++)
-		{
-			SDLInputJoystick *device = new SDLInputJoystick(i);
-			if(device->IsValid())
-				Joysticks.Push(device);
-			else
-				delete device;
-		}
+        RegisterJoysticks();
 	}
 	~SDLInputJoystickManager()
 	{
@@ -315,6 +308,20 @@ public:
 		}
 	}
 
+    void RegisterJoysticks(){
+        for(unsigned int i = 0;i < Joysticks.Size();i++)
+            delete Joysticks[i];
+
+        for(int i = 0;i < SDL_NumJoysticks();i++)
+        {
+            auto *device = new SDLInputJoystick(i);
+            if(device->IsValid())
+                Joysticks.Push(device);
+            else
+                delete device;
+        }
+    }
+
 	void ProcessInput() const
 	{
 		for(unsigned int i = 0;i < Joysticks.Size();++i)
@@ -324,6 +331,16 @@ protected:
 	TArray<SDLInputJoystick *> Joysticks;
 };
 static SDLInputJoystickManager *JoystickManager;
+
+#if ANDROID
+extern "C" {
+void RegisterJoysticks() {
+    if (JoystickManager) {
+        JoystickManager->RegisterJoysticks();
+    }
+}
+}
+#endif
 
 void I_StartupJoysticks()
 {
