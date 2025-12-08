@@ -528,8 +528,6 @@ class OptionMenuItemControlBase : OptionMenuItem
 		if (mkey == Menu.MKEY_Input)
 		{
 			mWaiting = false;
-            // ANDROID
-            //
 			mBindings.SetBind(mInput, mAction);
 			return true;
 		}
@@ -541,8 +539,6 @@ class OptionMenuItemControlBase : OptionMenuItem
 		else if (mkey == Menu.MKEY_Abort)
 		{
 			mWaiting = false;
-            // ANDROID
-            //
 			return true;
 		}
 		return false;

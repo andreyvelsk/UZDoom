@@ -149,19 +149,6 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 		sourcetype = GL_BGRA;
 	}
 
-#ifdef ANDROID
-	if (glTextureBytes == 1)
-	{
-		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-		sourcetype = GL_RED;
-		texformat = GL_R8;
-	}
-    else
-    {
-		texformat = sourcetype = GL_BGRA;
-    }
-#endif
-
 	if (!firstCall && glBufferID > 0)
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, rw, rh, sourcetype, GL_UNSIGNED_BYTE, buffer);
 	else
@@ -204,9 +191,6 @@ void FHardwareTexture::AllocateBuffer(int w, int h, int texelsize)
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, glBufferID);
 		glBufferData(GL_PIXEL_UNPACK_BUFFER, w*h*texelsize, nullptr, GL_STREAM_DRAW);
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-#ifdef ANDROID
-		size = w*h*texelsize;
-#endif
 	}
 }
 
@@ -214,11 +198,7 @@ void FHardwareTexture::AllocateBuffer(int w, int h, int texelsize)
 uint8_t *FHardwareTexture::MapBuffer()
 {
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, glBufferID);
-#ifdef ANDROID
-	return (uint8_t*)glMapBufferRange (GL_PIXEL_UNPACK_BUFFER, 0, size, GL_MAP_WRITE_BIT );
-#else
 	return (uint8_t*)glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
-#endif
 }
 
 //===========================================================================

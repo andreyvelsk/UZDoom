@@ -45,9 +45,6 @@ private:
 	unsigned int glBufferID = 0;
 	int glTextureBytes;
 	bool mipmapped = false;
-#ifdef ANDROID
-    int size;
-#endif
 
 	int GetDepthBuffer(int w, int h);
 

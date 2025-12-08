@@ -14,10 +14,8 @@ vec3 lightContribution(int i, vec3 normal)
 	vec3 lightdir = normalize(lightpos.xyz - pixelpos.xyz);
 	float dotprod = dot(normal, lightdir);
 
-	float frontside = 1.0;
-
-	frontside = step(-0.0001, dotprod); // frontside = 1 when lit from the front, otherwise its 0
-
+	if (dotprod < -0.0001) return vec3(0.0);	// light hits from the backside. This can happen with full sector light lists and must be rejected for all cases. Note that this can cause precision issues.
+	
 	float attenuation = clamp((lightpos.w - lightdistance) / lightpos.w, 0.0, 1.0);
 
 
@@ -28,14 +26,10 @@ vec3 lightContribution(int i, vec3 normal)
 
 #endif
 
-	// lightcolor.a = -1025 when attenuation is enabled, otherwise its 1025
-	// -1 <= dotprod <= 1
-	// Therefore when attenuation enabled: dotprod = dotprod, when disabled dotprod = 1025, which gets clamped to 1 below to make effective nop
-	dotprod = max(dotprod, lightcolor.a);
-	attenuation *= clamp(dotprod, 0.0, 1.0);
-
-	attenuation *= frontside;
-
+	if (lightcolor.a < 0.0) // Sign bit is the attenuated light flag
+	{
+		attenuation *= clamp(dotprod, 0.0, 1.0);
+	}
 	return lightcolor.rgb * attenuation;
 }
 
