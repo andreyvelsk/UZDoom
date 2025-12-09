@@ -23,7 +23,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#define USE_GLAD_LOADER 0 // Set to 1 to use the GLAD loader, otherwise use noramal GZDoom loader for PC
+#define USE_GLAD_LOADER 1 // Set to 1 to use the GLAD loader, otherwise use noramal GZDoom loader for PC
 
 #if (USE_GLAD_LOADER)
 	#include "glad/glad.h"
@@ -63,6 +63,11 @@
 	#define GL_SYNC_FLUSH_COMMANDS_BIT        0x00000001
 	#define GL_ALREADY_SIGNALED               0x911A
 	#define GL_CONDITION_SATISFIED            0x911C
+    #define GL_TEXTURE_SWIZZLE_A 0x8E45
+    #define GL_TEXTURE_SWIZZLE_B 0x8E44
+    #define GL_TEXTURE_SWIZZLE_G 0x8E43
+    #define GL_TEXTURE_SWIZZLE_R 0x8E42
+    #define GL_TEXTURE_SWIZZLE_RGBA 0x8E46
 
 #else
 	#include "gl_load/gl_load.h"
