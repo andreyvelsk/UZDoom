@@ -553,7 +553,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 		const char *vp_ptr = vp_comb.GetChars();
 		const char *fp_ptr = fp_comb.GetChars();
 
-#ifdef _GLES //karin: print glsl shader name for debug
+#ifdef ANDROID //karin: print glsl shader name for debug
         Printf("FShader::Load: Vertex=%s Fragment=%s\n", vert_prog_lump, frag_prog_lump);
 		extern void DumpGLSLShader(const char *name, const char *src);
 		DumpGLSLShader(vert_prog_lump, vp_ptr);

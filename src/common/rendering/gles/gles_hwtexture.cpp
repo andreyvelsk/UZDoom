@@ -181,7 +181,7 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 			glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzleMask);
 #endif
 		}
-#ifdef _GLESxxx //karin: swap R and B as GL_BGRA on OpenGLES
+#ifdef ANDROID //karin: swap R and B as GL_BGRA on OpenGLES
 		else
 		{
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);

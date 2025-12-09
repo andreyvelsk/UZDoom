@@ -126,6 +126,7 @@ void gl_LoadExtensions()
 	Printf("Android emulating OpenGL version: %s\n", glversion);
 #endif
 
+
 	if (version == NULL)
 	{
 		version = glversion;
@@ -153,6 +154,10 @@ void gl_LoadExtensions()
 
 	// add 0.01 to account for roundoff errors making the number a tad smaller than the actual version
 	gl.glslversion = strtod((char*)glGetString(GL_SHADING_LANGUAGE_VERSION), NULL) + 0.01f;
+#ifdef __ANDROID__ //karin: force GLSL version
+	extern float GLimp_GetGLSLVersion(void);
+	gl.glslversion = GLimp_GetGLSLVersion() + 0.01f;
+#endif
 
 	gl.vendorstring = (char*)glGetString(GL_VENDOR);
 	gl.modelstring = (char*)glGetString(GL_RENDERER);
@@ -174,7 +179,7 @@ void gl_LoadExtensions()
 	else if (gl_version >= 4.5f)
 	{
 		// Assume that everything works without problems on GL 4.5 drivers where these things are core features.
-#ifdef _GLES //karin: not support glBufferStorage on OpenGLES
+#ifdef ANDROID //karin: not support glBufferStorage on OpenGLES
 		gl.flags |= RFL_SHADER_STORAGE_BUFFER;
 #else
 		gl.flags |= RFL_SHADER_STORAGE_BUFFER | RFL_BUFFER_STORAGE;
@@ -187,7 +192,7 @@ void gl_LoadExtensions()
 			gl.flags &= ~RFL_SHADER_STORAGE_BUFFER;
 	}
 
-#ifdef _GLES //karin: check cull distance extension on OpenGLES
+#ifdef ANDROID //karin: check cull distance extension on OpenGLES
 	if(!CheckExtension("GL_EXT_clip_cull_distance"))
 		gl.flags |= RFL_NO_CLIP_PLANES;
 #endif

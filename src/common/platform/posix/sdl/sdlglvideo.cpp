@@ -56,8 +56,8 @@
 #endif
 
 #if ANDROID
-int harm_gl_version = 450;
-int harm_gl_es = 4;
+int harm_gl_version = 330;
+int harm_gl_es = 2;
 #endif
 
 #ifdef HAVE_VULKAN

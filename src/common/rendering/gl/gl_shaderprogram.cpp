@@ -161,7 +161,7 @@ void FShaderProgram::CompileShader(ShaderType type)
 	const FString &patchedCode = mShaderSources[type];
 	int lengths[1] = { (int)patchedCode.Len() };
 	const char *sources[1] = { patchedCode.GetChars() };
-#ifdef _GLES //karin: print glsl shader name for debug
+#ifdef ANDROID //karin: print glsl shader name for debug
 	Printf("FShaderProgram::CompileShader: %s (%s)\n", mShaderNames[type].GetChars(), type == Vertex ? "Vertex" : "Fragment");
 	DumpGLSLShader(mShaderNames[type].GetChars(), sources[0]);
 #endif
@@ -321,7 +321,7 @@ FString FShaderProgram::PatchShader(ShaderType type, const FString &code, const 
 	if (maxGlslVersion < 420 && gl.glslversion >= 4.2f) maxGlslVersion = 420;
 	int shaderVersion = min((int)round(gl.glslversion * 10) * 10, maxGlslVersion);
 #ifdef ANDROID //karin: using #version 320 es on OpenGLES
-	patchedCode.AppendFormat("#version 300 es\n");
+	patchedCode.AppendFormat("#version 320 es\n#define NO_CLIPDISTANCE_SUPPORT\n");
 #else
 	patchedCode.AppendFormat("#version %d\n", shaderVersion);
 #endif
@@ -331,6 +331,15 @@ FString FShaderProgram::PatchShader(ShaderType type, const FString &code, const 
 	// #extension GL_ARB_uniform_buffer_object : require
 	// #extension GL_ARB_shader_storage_buffer_object : require
 
+#ifdef ANDROID // Actually this is needed before the defines
+    patchedCode << "precision highp int;\n";
+    patchedCode << "precision highp float;\n";
+    patchedCode << "precision highp sampler2D;\n";
+    patchedCode << "precision highp sampler2DArray;\n";
+    patchedCode << "precision highp samplerCube;\n";
+    patchedCode << "precision highp sampler2DMS;\n";
+#endif
+
 	if (defines)
 		patchedCode << defines;
 
@@ -339,7 +348,7 @@ FString FShaderProgram::PatchShader(ShaderType type, const FString &code, const 
 	patchedCode << GetGLSLPrecision();
     patchedCode << R"(
 
-#define _GLES //karin: GLES macro only for OpenGL, not Vulkan
+#define ANDROID //karin: GLES macro only for OpenGL, not Vulkan
 
 )";
 #else

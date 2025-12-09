@@ -2085,7 +2085,7 @@ extern int ogl_ext_ARB_invalidate_subdata;
 #ifndef GL_ARB_buffer_storage
 #define GL_ARB_buffer_storage 1
 extern void (CODEGEN_FUNCPTR *_ptrc_glBufferStorage)(GLenum target, GLsizeiptr size, const void * data, GLbitfield flags);
-#ifdef _GLES //karin: glBufferStorage on OpenGLES
+#ifdef ANDROID //karin: glBufferStorage on OpenGLES
 #define glBufferStorage glesBufferStorage
 #else
 #define glBufferStorage _ptrc_glBufferStorage
@@ -4031,7 +4031,7 @@ extern void (CODEGEN_FUNCPTR *_ptrc_glBindTextures)(GLuint first, GLsizei count,
 extern void (CODEGEN_FUNCPTR *_ptrc_glBindVertexBuffers)(GLuint first, GLsizei count, const GLuint * buffers, const GLintptr * offsets, const GLsizei * strides);
 #define glBindVertexBuffers _ptrc_glBindVertexBuffers
 extern void (CODEGEN_FUNCPTR *_ptrc_glBufferStorage)(GLenum target, GLsizeiptr size, const void * data, GLbitfield flags);
-#ifdef _GLES //karin: glBufferStorage on OpenGLES
+#ifdef ANDROID //karin: glBufferStorage on OpenGLES
 inline void glesBufferStorage(GLenum target, GLsizeiptr size, const void * data, GLbitfield flags)
 {
 	glBufferData(target, size, data, GL_STREAM_DRAW);

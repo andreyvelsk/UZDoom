@@ -158,6 +158,7 @@ static void *dbgeglGetProcAddress(const char *name)
 			void* SDL_GL_GetProcAddress(const char* proc);
 			#define IntGetProcAddress(name) SDL_GL_GetProcAddress((const char*)name)
 			//#define IntGetProcAddress(name) PosixGetProcAddress((const GLubyte*)name)
+#endif
 /* END OF MANUAL CHANGES, DO NOT REMOVE! */
 		#else /* GLX */
 		    #include <GL/glx.h>

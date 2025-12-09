@@ -142,15 +142,7 @@ void main()
 	ClipDistanceA = vec4(ClipDistance0, ClipDistance1, ClipDistance2, ClipDistance3);
 	ClipDistanceB = vec4(ClipDistance4, 0.0, 0.0, 0.0);
 #else
-#ifdef ANDROID //karin: GLES3 extension
 #ifdef GL_EXT_clip_cull_distance
-	gl_ClipDistance[0] = ClipDistance0;
-	gl_ClipDistance[1] = ClipDistance1;
-	gl_ClipDistance[2] = ClipDistance2;
-	gl_ClipDistance[3] = ClipDistance3;
-	gl_ClipDistance[4] = ClipDistance4;
-#endif
-#else
 	gl_ClipDistance[0] = ClipDistance0;
 	gl_ClipDistance[1] = ClipDistance1;
 	gl_ClipDistance[2] = ClipDistance2;
