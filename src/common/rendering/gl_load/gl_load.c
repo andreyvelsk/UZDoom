@@ -135,30 +135,9 @@ static PROC WinGetProcAddress(const char *name)
 		#define IntGetProcAddress(name) AppleGLGetProcAddress(name)
 	#else
 		#if defined(__sgi) || defined(__sun) || defined(__unix__) || defined(__HAIKU__)
-#ifdef __ANDROID__ //karin: using EGL on Android
-			#include <EGL/egl.h>
-static intptr_t glesFunctionStub()
-{
-	printf("call OpenGL stub function!\n");
-	fprintf(stderr, "call OpenGL stub function!\n");
-	return 0;
-}
-static void *dbgeglGetProcAddress(const char *name)
-{
-	void *ptr = eglGetProcAddress(name);
-	if(!ptr)
-	{
-		printf("%s -> missing\n", name);
-		ptr = &glesFunctionStub;
-	}
-	return ptr;
-}
-			#define IntGetProcAddress(name) dbgeglGetProcAddress((const char *)name)
-#else
 			void* SDL_GL_GetProcAddress(const char* proc);
 			#define IntGetProcAddress(name) SDL_GL_GetProcAddress((const char*)name)
 			//#define IntGetProcAddress(name) PosixGetProcAddress((const GLubyte*)name)
-#endif
 /* END OF MANUAL CHANGES, DO NOT REMOVE! */
 		#else /* GLX */
 		    #include <GL/glx.h>
@@ -1462,6 +1441,10 @@ static int Load_Version_4_5(void)
 	if(!_ptrc_glDepthMask) numFailed++;
 	_ptrc_glDepthRange = (void (CODEGEN_FUNCPTR *)(GLdouble, GLdouble))IntGetProcAddress("glDepthRange");
 	if(!_ptrc_glDepthRange) numFailed++;
+#ifdef ANDROID
+	_ptrc_glDepthRangef = (void (CODEGEN_FUNCPTR *)(GLfloat, GLfloat))IntGetProcAddress("glDepthRangef");
+	if(!_ptrc_glDepthRangef) numFailed++;
+#endif
 	_ptrc_glDisable = (void (CODEGEN_FUNCPTR *)(GLenum))IntGetProcAddress("glDisable");
 	if(!_ptrc_glDisable) numFailed++;
 	_ptrc_glDrawBuffer = (void (CODEGEN_FUNCPTR *)(GLenum))IntGetProcAddress("glDrawBuffer");

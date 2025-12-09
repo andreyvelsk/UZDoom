@@ -1,4 +1,4 @@
-// 
+//
 //---------------------------------------------------------------------------
 //
 // Copyright(C) 2004-2016 Christoph Oelckers
@@ -50,7 +50,13 @@
 #include <map>
 #include <memory>
 
+
 EXTERN_CVAR(Bool, r_skipmats)
+#ifdef ANDROID
+EXTERN_CVAR(Bool, gl_customshader)
+extern bool gl_lite_shader;
+#endif
+
 
 namespace OpenGLRenderer
 {
@@ -67,6 +73,9 @@ static std::map<FString, std::unique_ptr<ProgramBinary>> ShaderCache; // Not a T
 
 bool IsShaderCacheActive()
 {
+#ifdef ANDROID
+	return false;
+#endif
 	static bool active = true;
 	static bool firstcall = true;
 
@@ -210,15 +219,108 @@ void SaveCachedProgramBinary(const FString &vertex, const FString &fragment, con
 	SaveShaders();
 }
 
+FString ProcessShaderError(const char * shaderError, TArray<FString> &filenames_for_error)
+{
+	//ugh, intel, amd and nvidia handle things differently so this has to be a mess
+	enum
+	{
+		READING_LUMP,
+		READING_LINE_COLON,
+		READING_LINE_PARENTHESES,
+		SKIP_TO_NEWLINE,
+	};
+
+	FString err(shaderError);
+	size_t cur = 0;
+	size_t state_start = 0;
+
+	size_t line_start = 0;
+	size_t num_end = 0;
+
+	int state = READING_LUMP;
+
+	int64_t lump_num = 0;
+
+	while(cur < err.Len())
+	{
+		if(state != SKIP_TO_NEWLINE)
+		{
+			while(err[cur] >= '0' && err[cur] <= '9')
+			{
+				cur++;
+			}
+
+			if(cur == state_start)
+			{
+				state = SKIP_TO_NEWLINE;
+			}
+			else if(state == READING_LUMP && (err[cur] == '(' || err[cur] == ':'))
+			{
+				FString lump_num_str = err.Mid(state_start, cur - state_start);
+				lump_num = lump_num_str.ToLong();
+				line_start = state_start;
+				state = (err[cur] == ':') ? READING_LINE_COLON : READING_LINE_PARENTHESES;
+				cur++;
+				state_start = cur;
+			}
+			else if((state == READING_LINE_COLON && err[cur] == ':') || (state == READING_LINE_PARENTHESES && err[cur] == ')'))
+			{
+				FString line_num_str = err.Mid(state_start, cur - state_start);
+
+				if(state == READING_LINE_PARENTHESES)
+				{
+					cur+= 3; // skip ") :"
+				}
+				else
+				{
+					cur++; // skip ":"
+				}
+
+				int64_t old_len = cur - line_start;
+				FString new_err = "File '" + filenames_for_error[lump_num - 1] + "', Line " + line_num_str + ": ";
+
+				int64_t diff = new_err.Len() - old_len;
+
+				err = err.Left(line_start) + new_err + err.Mid(line_start + old_len);
+
+				cur += diff;
+				state = SKIP_TO_NEWLINE;
+			}
+			else
+			{ // couldn't find a valid num, skip line
+				state = SKIP_TO_NEWLINE;
+			}
+		}
+		//not 'else if' to allow this to run immediately after
+		if(state == SKIP_TO_NEWLINE)
+		{
+			if(err[cur] == '\n' || err[cur] == '\r')
+			{
+				while(cur < err.Len() && (err[cur] == '\n' || err[cur] == '\r'))
+				{
+					cur++;
+				}
+				state_start = cur;
+				state = READING_LUMP;
+			}
+			else
+			{
+				cur++;
+			}
+		}
+	}
+	return err;
+}
+
 bool FShader::Load(const char * name, const char * vert_prog_lump, const char * frag_prog_lump, const char * proc_prog_lump, const char * light_fragprog, const char * defines)
 {
-	static char buffer[10000];
 	FString error;
 
 	FString i_data = R"(
 		// these settings are actually pointless but there seem to be some old ATI drivers that fail to compile the shader without setting the precision here.
 		precision highp int;
 		precision highp float;
+		precision highp sampler2DArray;
 
 		// This must match the HWViewpointUniforms struct
 		layout(std140) uniform ViewpointUBO {
@@ -230,13 +332,16 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 			vec4 uClipLine;
 
 			float uGlobVis;			// uGlobVis = R_GetGlobVis(r_visibility) / 32.0
-			int uPalLightLevels;	
+			int uPalLightLevels;
 			int uViewHeight;		// Software fuzz scaling
 			float uClipHeight;
 			float uClipHeightDirection;
 			int uShadowmapFilter;
-			
+
 			int uLightBlendMode;
+
+			float uThickFogDistance;
+			float uThickFogMultiplier;
 		};
 
 		uniform int uTextureMode;
@@ -389,40 +494,21 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 	assert(screen->mLights != NULL);
 	assert(screen->mBones != NULL);
 
-
-#ifdef ANDROID //karin: setup default precision on GLSL shader
-	if ((gl.flags & RFL_SHADER_STORAGE_BUFFER) && screen->allowSSBO())
-		vp_comb << "#version 300 es\n#define SUPPORTS_SHADOWMAPS\n";
-	else
-		vp_comb << "#version 300 es\n";
-
-	extern FString GetGLSLPrecision();
-	auto _i = i_data.IndexOf("precision highp int");
-	//i_data.Substitute("std430", "std140");
-	i_data.Substitute("precision highp int;\n", "");
-	i_data.Substitute("precision highp float;\n", "");
-	i_data.Insert(_i, GetGLSLPrecision());
-	i_data.Insert(0, R"(
-
-#extension GL_EXT_clip_cull_distance : enable
-#if !defined(GL_EXT_clip_cull_distance)
-#define NO_CLIPDISTANCE_SUPPORT 1
-#endif
-#define ANDROID //karin: GLES macro only for OpenGL, not Vulkan
-
-)");
+#ifdef ANDROID
+    bool lightbuffertype = screen->mLights->GetBufferType();
+	vp_comb.AppendFormat("#version 320 es\n#define NO_CLIPDISTANCE_SUPPORT\n#define NUM_UBO_LIGHTS %d\n#define NUM_UBO_BONES %d\n", screen->mLights->GetBlockSize(), screen->mBones->GetBlockSize());
 #else
 	if ((gl.flags & RFL_SHADER_STORAGE_BUFFER) && screen->allowSSBO())
 		vp_comb << "#version 430 core\n#define SUPPORTS_SHADOWMAPS\n";
 	else
 		vp_comb << "#version 330 core\n";
-#endif
 
 	bool lightbuffertype = screen->mLights->GetBufferType();
 	if (!lightbuffertype)
 		vp_comb.AppendFormat("#define NUM_UBO_LIGHTS %d\n#define NUM_UBO_BONES %d\n", screen->mLights->GetBlockSize(), screen->mBones->GetBlockSize());
 	else
 		vp_comb << "#define SHADER_STORAGE_LIGHTS\n#define SHADER_STORAGE_BONES\n";
+#endif
 
 	FString fp_comb = vp_comb;
 	vp_comb << defines << i_data.GetChars();
@@ -434,6 +520,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 	vp_comb << RemoveLayoutLocationDecl(GetStringFromLump(vp_lump), "out").GetChars() << "\n";
 	fp_comb << RemoveLayoutLocationDecl(GetStringFromLump(fp_lump), "in").GetChars() << "\n";
 	FString placeholder = "\n";
+	TArray<FString> filenames_for_error;
 
 	if (proc_prog_lump != NULL)
 	{
@@ -441,10 +528,10 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 
 		if (*proc_prog_lump != '#')
 		{
-			int pp_lump = fileSystem.CheckNumForFullName(proc_prog_lump, 0);	// if it's a core shader, ignore overrides by user mods.
-			if (pp_lump == -1) pp_lump = fileSystem.CheckNumForFullName(proc_prog_lump);
-			if (pp_lump == -1) I_Error("Unable to load '%s'", proc_prog_lump);
-			FString pp_data = GetStringFromLump(pp_lump);
+            int pp_lump = fileSystem.CheckNumForFullName(proc_prog_lump, 0);
+            if (pp_lump == -1) pp_lump = fileSystem.CheckNumForFullName(proc_prog_lump);
+            if (pp_lump == -1) I_Error("Unable to load '%s'", proc_prog_lump);
+            FString pp_data = GetStringFromLump(pp_lump);
 
 			if (pp_data.IndexOf("ProcessMaterial") < 0 && pp_data.IndexOf("SetupMaterial") < 0)
 			{
@@ -517,10 +604,6 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 		// This will cause some glitches and regressions but is the only way to avoid total display garbage.
 		vp_comb.Substitute("gl_ClipDistance", "//");
 	}
-#ifdef ANDROID //karin: force std140 on GLSL shader
-	vp_comb.Substitute("std430", "std140");
-	fp_comb.Substitute("std430", "std140");
-#endif
 
 	hShader = glCreateProgram();
 	FGLDebug::LabelObject(GL_PROGRAM, hShader, name);
@@ -553,46 +636,75 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 		const char *vp_ptr = vp_comb.GetChars();
 		const char *fp_ptr = fp_comb.GetChars();
 
-#ifdef ANDROID //karin: print glsl shader name for debug
-        Printf("FShader::Load: Vertex=%s Fragment=%s\n", vert_prog_lump, frag_prog_lump);
-		extern void DumpGLSLShader(const char *name, const char *src);
-		DumpGLSLShader(vert_prog_lump, vp_ptr);
-		DumpGLSLShader(frag_prog_lump, fp_ptr);
-#endif
 		glShaderSource(hVertProg, 1, &vp_ptr, &vp_size);
 		glShaderSource(hFragProg, 1, &fp_ptr, &fp_size);
 
+		GLint status = 0;
+
+		bool errored = false;
+
 		glCompileShader(hVertProg);
+
+		if (glGetShaderiv(hVertProg, GL_COMPILE_STATUS, &status); status == GL_FALSE)
+		{
+			TArray<char> buffer;
+			GLint info_log_length = 1;
+			glGetShaderiv(hVertProg, GL_INFO_LOG_LENGTH, &info_log_length);
+			buffer.Resize(info_log_length + 1);
+
+			glGetShaderInfoLog(hVertProg, info_log_length + 1, NULL, buffer.Data());
+			if (*buffer.Data())
+			{
+				//error << "Vertex shader:\n" << buffer.Data() << "\n";
+				error << "Vertex shader:\n" << ProcessShaderError(buffer.Data(), filenames_for_error) << "\n";
+			}
+
+			errored = true;
+		}
+
 		glCompileShader(hFragProg);
+
+		if (glGetShaderiv(hFragProg, GL_COMPILE_STATUS, &status); status == GL_FALSE)
+		{
+			TArray<char> buffer;
+			GLint info_log_length = 1;
+			glGetShaderiv(hFragProg, GL_INFO_LOG_LENGTH, &info_log_length);
+			buffer.Resize(info_log_length + 1);
+
+			glGetShaderInfoLog(hFragProg, info_log_length + 1, NULL, buffer.Data());
+			if (*buffer.Data())
+			{
+				error << "Fragment shader:\n" << ProcessShaderError(buffer.Data(), filenames_for_error) << "\n";
+			}
+
+			errored = true;
+		}
+
+		if(errored)
+		{
+			// only print message if there's an error.
+			I_Error("Errors Compiliong Shader '%s':\n%s\n", name, error.GetChars());
+		}
 
 		glAttachShader(hShader, hVertProg);
 		glAttachShader(hShader, hFragProg);
 
 		glLinkProgram(hShader);
 
-		glGetShaderInfoLog(hVertProg, 10000, NULL, buffer);
-		if (*buffer)
+		if (glGetProgramiv(hShader, GL_LINK_STATUS, &status); status == GL_FALSE)
 		{
-			error << "Vertex shader:\n" << buffer << "\n";
-		}
-		glGetShaderInfoLog(hFragProg, 10000, NULL, buffer);
-		if (*buffer)
-		{
-			error << "Fragment shader:\n" << buffer << "\n";
-		}
+			TArray<char> buffer;
+			GLint info_log_length = 1;
+			glGetProgramiv(hShader, GL_INFO_LOG_LENGTH, &info_log_length);
+			buffer.Resize(info_log_length + 1);
 
-		glGetProgramInfoLog(hShader, 10000, NULL, buffer);
-		if (*buffer)
-		{
-			error << "Linking:\n" << buffer << "\n";
-		}
-		GLint status = 0;
-		glGetProgramiv(hShader, GL_LINK_STATUS, &status);
-		linked = (status == GL_TRUE);
-		if (!linked)
-		{
-			// only print message if there's an error.
-			I_Error("Init Shader '%s':\n%s\n", name, error.GetChars());
+			glGetProgramInfoLog(hShader, info_log_length + 1, NULL, buffer.Data());
+			if (*buffer.Data())
+			{
+				error << "Linking:\n" << buffer.Data() << "\n";
+			}
+
+			I_Error("Errors Linking Shader '%s':\n%s\n", name, error.GetChars());
 		}
 		else if (glProgramBinary && IsShaderCacheActive())
 		{
@@ -676,7 +788,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 	if (lightmapindex != -1) glUniform1i(lightmapindex, 17);
 
 	glUseProgram(0);
-	return linked;
+	return true;
 }
 
 //==========================================================================
@@ -720,6 +832,11 @@ FShader *FShaderCollection::Compile (const char *ShaderName, const char *ShaderP
 	// this can't be in the shader code due to ATI strangeness.
 	if (!usediscard) defines += "#define NO_ALPHATEST\n";
 	if (passType == GBUFFER_PASS) defines += "#define GBUFFER_PASS\n";
+
+#ifdef ANDROID
+	if(gl_lite_shader)
+		defines += "#define SHADER_LITE\n";
+#endif
 
 	FShader *shader = NULL;
 	try
@@ -852,7 +969,7 @@ bool FShaderCollection::CompileNextShader()
 		{
 			mCompileIndex = 0;
 			mCompileState++;
-			
+
 		}
 	}
 	else if (mCompileState == 1)
@@ -864,7 +981,11 @@ bool FShaderCollection::CompileNextShader()
 		{
 			mCompileIndex = 0;
 			mCompileState++;
+#ifdef ANDROID
+			if (usershaders.Size() == 0 || !gl_customshader) mCompileState++;
+#else
 			if (usershaders.Size() == 0) mCompileState++;
+#endif
 		}
 	}
 	else if (mCompileState == 2)

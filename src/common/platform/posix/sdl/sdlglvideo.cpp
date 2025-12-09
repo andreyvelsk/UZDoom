@@ -50,14 +50,16 @@
 
 #include "gl_framebuffer.h"
 #include "gl_renderer.h"
+#ifdef ANDROID
+#include "gles_system.h"
+#endif
 
 #ifdef HAVE_GLES2
 #include "gles_framebuffer.h"
 #endif
 
 #if ANDROID
-int harm_gl_version = 330;
-int harm_gl_es = 2;
+int harm_gl_es = HARM_GL_ES_GLES2;
 #endif
 
 #ifdef HAVE_VULKAN
@@ -770,52 +772,24 @@ void I_SetWindowTitle(const char* caption)
 }
 
 #if ANDROID
-float GLimp_GetGLSLVersion(void)
-{
-    if (V_GetBackend() == 0)
-        return 3.20f;
-    else
-    {
-        if(USING_GLES_2)
-            return 1.00f;
-        else if(USING_GLES_3)
-            return 3.00f;
-        else if(USING_GLES_32)
-            return 3.20f;
-        else
-            return 1.00f; // 3.00f
-    }
-}
-
 float GLimp_GetGLVersion(void)
 {
-    if (V_GetBackend() == 0)
-    {
-        int glVersion = harm_gl_version;
-        if (glVersion <= 0)
-            return 4.5f; // 4.2f;
-        else if(glVersion == 330)
-            return 3.3f;
-        else if(glVersion == 420)
-            return 4.2f;
-        else if(glVersion == 430)
-            return 4.3f;
-        else if(glVersion == 450)
-            return 4.5f;
-        else
-            return float(glVersion) / 100.0f;
-    }
+    if(USING_GLES_2)
+        return 2.0f;
+    else if(USING_GLES_3)
+        return 3.0f;
+    else if(USING_GLES_32)
+        return 3.2f;
     else
-    {
-        if(USING_GLES_2)
-            return 2.0f;
-        else if(USING_GLES_3)
-            return 3.2f;
-        else if(USING_GLES_32)
-            return 3.2f;
-        else
-            return 3.0f;
-    }
+        return 3.0f;
+
 }
+
+extern "C" {
+void UpdateHarmGLESVersion(int targetHarmGLESVersion) {
+    harm_gl_es = targetHarmGLESVersion;
+}
+}
+
 #endif
 

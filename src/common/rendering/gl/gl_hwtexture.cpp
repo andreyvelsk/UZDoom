@@ -139,35 +139,33 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 	{
 		if (glTextureBytes < 4) glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 		static const int ITypes[] = { GL_R8, GL_RG8, GL_RGB8, GL_RGBA8 };
-#ifdef ANDROID //karin: internal format must same as data format on OpenGLES
-		static const int STypes[] = { GL_RED, GL_RG, GL_RGB, GL_RGBA };
-#else
 		static const int STypes[] = { GL_RED, GL_RG, GL_BGR, GL_BGRA };
-#endif
 
 		texformat = ITypes[glTextureBytes - 1];
 		sourcetype = STypes[glTextureBytes - 1];
 	}
 	else
 	{
-#ifdef ANDROID //karin: internal format must same as data format on OpenGLES
-		sourcetype = GL_RGBA;
-#else
 		sourcetype = GL_BGRA;
-#endif
 	}
+
+#ifdef ANDROID
+	if (glTextureBytes == 1)
+	{
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		sourcetype = GL_RED;
+		texformat = GL_R8;
+	}
+    else
+    {
+		texformat = sourcetype = GL_BGRA;
+    }
+#endif
 
 	if (!firstCall && glBufferID > 0)
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, rw, rh, sourcetype, GL_UNSIGNED_BYTE, buffer);
 	else
 		glTexImage2D(GL_TEXTURE_2D, 0, texformat, rw, rh, 0, sourcetype, GL_UNSIGNED_BYTE, buffer);
-#ifdef ANDROID //karin: swap R and B on OpenGLES
-	if(sourcetype == GL_RGB || sourcetype == GL_RGBA)
-	{
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
-	}
-#endif
 
 	if (deletebuffer && buffer) free(buffer);
 	else if (glBufferID)
@@ -206,6 +204,9 @@ void FHardwareTexture::AllocateBuffer(int w, int h, int texelsize)
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, glBufferID);
 		glBufferData(GL_PIXEL_UNPACK_BUFFER, w*h*texelsize, nullptr, GL_STREAM_DRAW);
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+#ifdef ANDROID
+		size = w*h*texelsize;
+#endif
 	}
 }
 
@@ -213,7 +214,11 @@ void FHardwareTexture::AllocateBuffer(int w, int h, int texelsize)
 uint8_t *FHardwareTexture::MapBuffer()
 {
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, glBufferID);
+#ifdef ANDROID
+	return (uint8_t*)glMapBufferRange (GL_PIXEL_UNPACK_BUFFER, 0, size, GL_MAP_WRITE_BIT );
+#else
 	return (uint8_t*)glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+#endif
 }
 
 //===========================================================================

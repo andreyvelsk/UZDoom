@@ -115,16 +115,14 @@ void gl_LoadExtensions()
 
 	const char *glversion = (const char*)glGetString(GL_VERSION);
 
+#ifdef ANDROID
+	glversion = "3.3";
+	gl.flags |= RFL_NO_CLIP_PLANES;
+	gl.flags |= RFL_INVALIDATE_BUFFER;
+#endif
+
 	const char *version = Args->CheckValue("-glversion");
 	realglversion = strtod(glversion, NULL);
-#ifdef __ANDROID__ //karin: force GL version
-	extern float GLimp_GetGLVersion(void);
-	realglversion = GLimp_GetGLVersion();
-	FString glversionStr;
-	glversionStr.AppendFormat("%f", realglversion);
-	glversion = glversionStr.GetChars();
-	Printf("Android emulating OpenGL version: %s\n", glversion);
-#endif
 
 
 	if (version == NULL)
@@ -154,10 +152,6 @@ void gl_LoadExtensions()
 
 	// add 0.01 to account for roundoff errors making the number a tad smaller than the actual version
 	gl.glslversion = strtod((char*)glGetString(GL_SHADING_LANGUAGE_VERSION), NULL) + 0.01f;
-#ifdef __ANDROID__ //karin: force GLSL version
-	extern float GLimp_GetGLSLVersion(void);
-	gl.glslversion = GLimp_GetGLSLVersion() + 0.01f;
-#endif
 
 	gl.vendorstring = (char*)glGetString(GL_VENDOR);
 	gl.modelstring = (char*)glGetString(GL_RENDERER);
@@ -179,11 +173,7 @@ void gl_LoadExtensions()
 	else if (gl_version >= 4.5f)
 	{
 		// Assume that everything works without problems on GL 4.5 drivers where these things are core features.
-#ifdef ANDROID //karin: not support glBufferStorage on OpenGLES
-		gl.flags |= RFL_SHADER_STORAGE_BUFFER;
-#else
 		gl.flags |= RFL_SHADER_STORAGE_BUFFER | RFL_BUFFER_STORAGE;
-#endif
 
 		// Mesa implements shader storage only for fragment shaders.
 		// Just disable the feature there. The light buffer may just use a uniform buffer without any adverse effects.
@@ -192,10 +182,6 @@ void gl_LoadExtensions()
 			gl.flags &= ~RFL_SHADER_STORAGE_BUFFER;
 	}
 
-#ifdef ANDROID //karin: check cull distance extension on OpenGLES
-	if(!CheckExtension("GL_EXT_clip_cull_distance"))
-		gl.flags |= RFL_NO_CLIP_PLANES;
-#endif
 
 
 	if (gl_version >= 4.3f || CheckExtension("GL_ARB_invalidate_subdata")) gl.flags |= RFL_INVALIDATE_BUFFER;

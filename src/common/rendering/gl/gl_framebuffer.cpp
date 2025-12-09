@@ -175,8 +175,17 @@ void OpenGLFrameBuffer::InitializeState()
 	mBones = new BoneBuffer(screen->mPipelineNbr);
 	GLRenderer = new FGLRenderer(this);
 	GLRenderer->Initialize(GetWidth(), GetHeight());
+
 	static_cast<GLDataBuffer*>(mLights->GetBuffer())->BindBase();
 	static_cast<GLDataBuffer*>(mBones->GetBuffer())->BindBase();
+
+#ifdef __ANDROID__ 	// This is needed to stop Ardeno 530 from crashing on the first drawer
+	static_cast<GLDataBuffer*>(mLights->GetBuffer())->Map();
+	static_cast<GLDataBuffer*>(mLights->GetBuffer())->Unmap();
+
+	static_cast<GLDataBuffer*>(mBones->GetBuffer())->Map();
+	static_cast<GLDataBuffer*>(mBones->GetBuffer())->Unmap();
+#endif
 
 	mDebug = std::make_unique<FGLDebug>();
 	mDebug->Update();
@@ -200,7 +209,18 @@ void OpenGLFrameBuffer::Update()
 	Swap();
 	Super::Update();
 }
+#ifdef ANDROID
+uint8_t * gles_convertRGB(uint8_t* src, uint8_t * dst, int width, int height)
+{
+	for (int i=0; i<width*height; i++) {
+		for (int j=0; j<3; j++)
+			*(dst++) = *(src++);
+		src++;
+	}
 
+	return dst;
+}
+#endif
 void OpenGLFrameBuffer::CopyScreenToBuffer(int width, int height, uint8_t* scr)
 {
 	IntRect bounds;
@@ -212,19 +232,11 @@ void OpenGLFrameBuffer::CopyScreenToBuffer(int width, int height, uint8_t* scr)
 
 	// strictly speaking not needed as the glReadPixels should block until the scene is rendered, but this is to safeguard against shitty drivers
 	glFinish();
-#ifdef ANDROID //karin: glReadPixels using GL_RGBA on OpenGLES
-	uint8_t *scr4 = (uint8_t *)malloc(4 * width * height);
-	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, scr4);
-	for(int h = 0; h < height; h++)
-	{
-		for(int w = 0; w < width; w++)
-		{
-			const uint8_t *src = scr4 + (width * h + w) * 4;
-			uint8_t *dst = scr + (width * h + w) * 3;
-			memcpy(dst, src, 3);
-		}
-	}
-	free(scr4);
+#ifdef ANDROID
+	uint8_t* tmp = (uint8_t *)M_Malloc(width * height * 4);
+	glReadPixels(0, 0, width, height, GL_RGBA,GL_UNSIGNED_BYTE, tmp);
+	gles_convertRGB( tmp, scr, width, height);
+	M_Free(tmp);
 #else
 	glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, scr);
 #endif
@@ -296,6 +308,12 @@ void OpenGLFrameBuffer::Swap()
 
 		RenderState()->SetVertexBuffer(screen->mVertexData); // Needed for Raze because it does not reset it
 	}
+
+#ifdef ANDROID
+	GLRenderer->mShaderManager->SetActiveShader(0);
+#endif
+
+
 	Finish.Unclock();
 	camtexcount = 0;
 	FHardwareTexture::UnbindAll();
@@ -522,22 +540,7 @@ TArray<uint8_t> OpenGLFrameBuffer::GetScreenshotBuffer(int &pitch, ESSType &colo
 	TArray<uint8_t> pixels;
 	pixels.Resize(viewport.width * viewport.height * 3);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-#ifdef ANDROID //karin: glReadPixels using GL_RGBA on OpenGLES
-	uint8_t *pixels4 = (uint8_t *)malloc(4 * viewport.width * viewport.height);
-	glReadPixels(viewport.left, viewport.top, viewport.width, viewport.height, GL_RGBA, GL_UNSIGNED_BYTE, pixels4);
-	for(int h = 0; h < viewport.height; h++)
-	{
-		for(int w = 0; w < viewport.width; w++)
-		{
-			const uint8_t *src = pixels4 + (viewport.width * h + w) * 4;
-			uint8_t *dst = (&pixels[0]) + (viewport.width * h + w) * 3;
-			memcpy(dst, src, 3);
-		}
-	}
-	free(pixels4);
-#else
 	glReadPixels(viewport.left, viewport.top, viewport.width, viewport.height, GL_RGB, GL_UNSIGNED_BYTE, &pixels[0]);
-#endif
 	glPixelStorei(GL_PACK_ALIGNMENT, 4);
 
 	// Copy to screenshot buffer:

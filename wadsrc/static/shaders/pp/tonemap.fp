@@ -58,7 +58,7 @@ vec3 Tonemap(vec3 color)
 {
 	float W = 11.2;
 	vec3 curr = Uncharted2Tonemap(color);
-	vec3 whiteScale = vec3(1.0) / Uncharted2Tonemap(vec3(W));
+	vec3 whiteScale = vec3(1) / Uncharted2Tonemap(vec3(W));
 	return sRGB(curr * whiteScale);
 }
 
