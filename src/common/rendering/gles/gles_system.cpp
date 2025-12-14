@@ -270,7 +270,7 @@ namespace OpenGLESRenderer
 		{
 			Printf("GLES choosing mode: GLES_MODE_OGL32\n");
 
-			gles.shaderVersionString = USING_GLES_32 ? "320 es" : "300 es"; // for 320 es need make attribute/varying/gl_FragColor -> in/out
+			gles.shaderVersionString = "300 es"; // for 320 es need make attribute/varying/gl_FragColor -> in/out
 			gles.depthStencilAvailable = CheckExtension("GL_OES_packed_depth_stencil");
 			gles.npotAvailable = CheckExtension("GL_OES_texture_npot");
 			gles.depthClampAvailable = CheckExtension("GL_EXT_depth_clamp");
