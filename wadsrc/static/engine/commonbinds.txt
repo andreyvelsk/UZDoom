@@ -20,6 +20,10 @@ enter invuse
 = sizeup
 shift +speed
 mouse1 +attack
+r +reload
+z +zoom
+enter +attack
+ctrl +altattack
 capslock "toggle cl_run"
 f1 menu_help
 f2 menu_save

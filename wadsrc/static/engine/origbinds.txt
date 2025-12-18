@@ -12,7 +12,10 @@ space +use
 mouse2 +strafe
 mouse3 +forward
 mouse4 +speed
-
+r +reload
+z +zoom
+enter +attack
+ctrl +altattack
 // Generic joystick buttons
 joy1 +attack
 joy2 +strafe
