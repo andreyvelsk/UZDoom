@@ -49,6 +49,9 @@
 #include "v_draw.h"
 #include "g_input.h"
 #include "texturemanager.h"
+#ifdef ANDROID
+bool StartScreenRendered = false;
+#endif
 
 // Text mode color values
 enum{
@@ -667,6 +670,9 @@ void FStartScreen::Render(bool force)
 	// Do not refresh too often. This function gets called a lot more frequently than the screen can update.
 	if (nowtime - screen->FrameTime > minwaittime || force)
 	{
+#ifdef ANDROID
+        StartScreenRendered = true;
+#endif
 		screen->FrameTime = nowtime;
 		screen->BeginFrame();
 		twod->ClearClipRect();

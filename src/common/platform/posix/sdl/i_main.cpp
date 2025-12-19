@@ -215,6 +215,7 @@ int main (int argc, char **argv)
 #include "menustate.h"
 #include "i_soundinternal.h"
 extern bool AppActive;
+extern bool StartScreenRendered;
 bool gl_lite_shader = false;
 
 extern "C"{
@@ -233,11 +234,15 @@ void pauseSound() {
 }
 
 bool needToShowScreenControls() {
-    return menuactive == MENU_Off || menuactive == MENU_OnNoPause;
+    return menuactive == MENU_Off;
 }
 
 bool needToInvokeMouseButtonsEvents(){
-    return menuactive == MENU_On || menuactive == MENU_WaitKey;
+    bool isMenuActive = menuactive!=MENU_Off;
+    if (isMenuActive){
+        StartScreenRendered = false;
+    }
+    return isMenuActive || StartScreenRendered;
 }
 }
 #endif
