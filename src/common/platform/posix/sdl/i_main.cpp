@@ -234,7 +234,7 @@ void pauseSound() {
 }
 
 bool needToShowScreenControls() {
-    return menuactive == MENU_Off || menuactive == MENU_WaitKey;
+    return menuactive == MENU_Off;
 }
 
 bool needToInvokeMouseButtonsEvents(){
