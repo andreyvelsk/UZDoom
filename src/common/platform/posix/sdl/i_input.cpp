@@ -528,6 +528,14 @@ void MessagePump (const SDL_Event &sev)
 	}
 }
 
+#ifdef ANDROID
+extern "C"{
+void rescanGameControllersForced() {
+    I_UpdateDeviceList();
+}
+}
+#endif
+
 void I_GetEvent ()
 {
 	SDL_Event sev;
