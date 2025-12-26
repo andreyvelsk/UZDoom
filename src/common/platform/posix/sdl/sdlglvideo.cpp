@@ -715,18 +715,7 @@ void ProcessSDLWindowEvent(const SDL_WindowEvent &event)
 {
 	switch (event.event)
 	{
-	extern bool AppActive;
 #ifndef ANDROID
-        case SDL_WINDOWEVENT_FOCUS_GAINED:
-		S_SetSoundPaused(1);
-		AppActive = true;
-		break;
-
-	case SDL_WINDOWEVENT_FOCUS_LOST:
-		S_SetSoundPaused(0);
-		AppActive = false;
-		break;
-
 	case SDL_WINDOWEVENT_MOVED:
 		if (!vid_fullscreen)
 		{
