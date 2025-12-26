@@ -469,6 +469,10 @@ const SDLInputJoystick::DefaultAxisConfig SDLInputJoystick::DefaultControllerAxe
 	{JOYDEADZONE_DEFAULT, JOYAXIS_None,    JOYSENSITIVITY_DEFAULT, JOYTHRESH_TRIGGER, JOYCURVE_DEFAULT},
 };
 
+#ifdef ANDROID
+extern char *virtualControllerGUID;
+#endif
+
 class SDLInputJoystickManager
 {
 public:
@@ -483,19 +487,22 @@ public:
 		Joysticks.DeleteAndClear();
         const int numJoysticks = SDL_NumJoysticks();
 
-        const char* virtualControllerName = "Xbox Series X Controller";
-        const int virtualBallsCount = 1;
         int virtualControllerIndex = -1;
 
-        for (int i = 0; i < numJoysticks; i++) {
-            SDL_Joystick *js = SDL_JoystickOpen(i);
-            const char* joystickName = SDL_JoystickName(js);
-            const int ballsCount =  SDL_JoystickNumBalls(js);
-            SDL_JoystickClose(js);
+        if (virtualControllerGUID!= nullptr) {
+            for (int i = 0; i < numJoysticks; i++) {
+                SDL_Joystick *js = SDL_JoystickOpen(i);
+                if (js != nullptr) {
+                    const SDL_JoystickGUID guid = SDL_JoystickGetGUID(js);
+                    char guid_str[33];
+                    SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
+                    SDL_JoystickClose(js);
 
-            if (virtualBallsCount == ballsCount && joystickName && strcmp(joystickName, virtualControllerName) == 0){
-                virtualControllerIndex = i;
-                break;
+                    if (strcmp(guid_str, virtualControllerGUID) == 0) {
+                        virtualControllerIndex = i;
+                        break;
+                    }
+                }
             }
         }
 

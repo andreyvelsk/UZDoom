@@ -540,8 +540,12 @@ void MessagePump (const SDL_Event &sev)
 }
 
 #ifdef ANDROID
+char *virtualControllerGUID = nullptr;
 extern "C"{
-void rescanGameControllersForced() {
+void rescanGameControllersForced(char *targetVirtualControllerGUID){
+    if (targetVirtualControllerGUID!= nullptr && strlen(targetVirtualControllerGUID) > 0 && virtualControllerGUID== nullptr){
+        virtualControllerGUID = strdup(targetVirtualControllerGUID);
+    }
     I_UpdateDeviceList();
 }
 }
