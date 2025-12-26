@@ -479,6 +479,7 @@ public:
 
 	void UpdateDeviceList()
 	{
+        SDL_GameControllerUpdate();
 		Joysticks.DeleteAndClear();
 		for(int i = 0; i < SDL_NumJoysticks(); i++)
 		{
