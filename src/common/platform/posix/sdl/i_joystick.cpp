@@ -469,10 +469,6 @@ const SDLInputJoystick::DefaultAxisConfig SDLInputJoystick::DefaultControllerAxe
 	{JOYDEADZONE_DEFAULT, JOYAXIS_None,    JOYSENSITIVITY_DEFAULT, JOYTHRESH_TRIGGER, JOYCURVE_DEFAULT},
 };
 
-#ifdef ANDROID
-extern char *virtualControllerGUID;
-#endif
-
 class SDLInputJoystickManager
 {
 public:
@@ -489,20 +485,10 @@ public:
 
         int virtualControllerIndex = -1;
 
-        if (virtualControllerGUID!= nullptr) {
-            for (int i = 0; i < numJoysticks; i++) {
-                SDL_Joystick *js = SDL_JoystickOpen(i);
-                if (js != nullptr) {
-                    const SDL_JoystickGUID guid = SDL_JoystickGetGUID(js);
-                    char guid_str[33];
-                    SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
-                    SDL_JoystickClose(js);
-
-                    if (strcmp(guid_str, virtualControllerGUID) == 0) {
-                        virtualControllerIndex = i;
-                        break;
-                    }
-                }
+        for (int i = 0; i < numJoysticks; i++) {
+            if(SDL_JoystickIsVirtual(i)){
+                virtualControllerIndex = i;
+                break;
             }
         }
 
