@@ -481,11 +481,35 @@ public:
 	{
         SDL_GameControllerUpdate();
 		Joysticks.DeleteAndClear();
-		for(int i = 0; i < SDL_NumJoysticks(); i++)
+        const int numJoysticks = SDL_NumJoysticks();
+
+        const char* virtualControllerName = "Xbox Series X Controller";
+        const int virtualBallsCount = 1;
+        int virtualControllerIndex = -1;
+
+        for (int i = 0; i < numJoysticks; i++) {
+            SDL_Joystick *js = SDL_JoystickOpen(i);
+            const char* joystickName = SDL_JoystickName(js);
+            const int ballsCount =  SDL_JoystickNumBalls(js);
+            SDL_JoystickClose(js);
+
+            if (virtualBallsCount == ballsCount && joystickName && strcmp(joystickName, virtualControllerName) == 0){
+                virtualControllerIndex = i;
+                break;
+            }
+        }
+
+        for(int i = 0; i < numJoysticks; i++)
 		{
+            if (virtualControllerIndex!=-1 && i!=virtualControllerIndex){
+                continue;
+            }
+
 			SDLInputJoystick *device = new SDLInputJoystick(i);
-			if(device->IsValid())
-				Joysticks.Push(device);
+			if(device->IsValid()) {
+                Joysticks.Push(device);
+                break;
+            }
 			else
 				delete device;
 		}
