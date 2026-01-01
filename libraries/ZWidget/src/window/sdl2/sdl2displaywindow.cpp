@@ -1,10 +1,13 @@
 
 #include "sdl2displaywindow.h"
+#include "SDL2/SDL_vulkan.h"
 #include <stdexcept>
 
 Uint32 SDL2DisplayWindow::PaintEventNumber = 0xffffffff;
 bool SDL2DisplayWindow::ExitRunLoop;
 std::unordered_map<int, SDL2DisplayWindow*> SDL2DisplayWindow::WindowList;
+
+extern bool isVulkanEnabled();
 
 class InitSDL
 {
@@ -170,7 +173,11 @@ Rect SDL2DisplayWindow::GetWindowFrame() const
 	int h = 0;
 	double uiscale = GetDpiScale();
 	SDL_GetWindowPosition(WindowHandle, &x, &y);
-	SDL_GetWindowSize(WindowHandle, &w, &h);
+    if (isVulkanEnabled()){
+        SDL_Vulkan_GetDrawableSize(WindowHandle, &w, &h);
+    } else{
+        SDL_GL_GetDrawableSize(WindowHandle, &w, &h);
+    }
 	return Rect::xywh(x / uiscale, y / uiscale, w / uiscale, h / uiscale);
 }
 
@@ -179,7 +186,11 @@ Size SDL2DisplayWindow::GetClientSize() const
 	int w = 0;
 	int h = 0;
 	double uiscale = GetDpiScale();
-	SDL_GetWindowSize(WindowHandle, &w, &h);
+    if (isVulkanEnabled()){
+        SDL_Vulkan_GetDrawableSize(WindowHandle, &w, &h);
+    } else{
+        SDL_GL_GetDrawableSize(WindowHandle, &w, &h);
+    }
 	return Size(w / uiscale, h / uiscale);
 }
 

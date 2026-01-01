@@ -274,6 +274,10 @@ namespace Priv
 	}
 }
 
+bool isVulkanEnabled(){
+    return Priv::vulkanEnabled;
+}
+
 CUSTOM_CVAR(Int, vid_adapter, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL)
 {
 #ifndef ANDROID
