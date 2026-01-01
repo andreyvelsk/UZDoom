@@ -726,14 +726,22 @@ void ProcessSDLWindowEvent(const SDL_WindowEvent &event)
 		}
 		break;
 
-	case SDL_WINDOWEVENT_RESIZED:
-		if (!vid_fullscreen && !Priv::fullscreenSwitch)
-		{
-			win_w = event.data1;
-			win_h = event.data2;
-		}
-		break;
 #endif
+        case SDL_WINDOWEVENT_RESIZED:
+#ifndef ANDROID
+            if (!vid_fullscreen && !Priv::fullscreenSwitch)
+            {
+                win_w = event.data1;
+                win_h = event.data2;
+            }
+#else
+            int w,h;
+            SDL_GL_GetDrawableSize(Priv::window, &w, &h);
+            win_w = w;
+            win_h = h;
+#endif
+            break;
+
 	case SDL_WINDOWEVENT_MAXIMIZED:
 		win_maximized = true;
 		break;
