@@ -202,7 +202,12 @@ namespace Priv
         Priv::window = SDL_CreateWindow(caption.GetChars(), 0, 0, 0, 0, extraFlags);
 
         int windowWidth, windowHeight;
-        SDL_GL_GetDrawableSize(Priv::window, &windowWidth, &windowHeight);
+
+        if (V_GetBackend() != 1) {
+            SDL_GL_GetDrawableSize(Priv::window, &windowWidth, &windowHeight);
+        } else {
+            SDL_Vulkan_GetDrawableSize(Priv::window, &windowWidth, &windowHeight);
+        }
 
         win_w = windowWidth;
         win_h = windowHeight;
@@ -275,7 +280,7 @@ namespace Priv
 }
 
 bool isVulkanEnabled(){
-    return Priv::vulkanEnabled;
+    return V_GetBackend() == 1;
 }
 
 CUSTOM_CVAR(Int, vid_adapter, 0, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_NOINITCALL)
