@@ -403,7 +403,7 @@ SDLVideo::SDLVideo ()
 	if (Priv::vulkanEnabled)
 	{
 #if ANDROID
-        Priv::CreateWindow(SDL_WINDOW_VULKAN | SDL_WINDOW_FULLSCREEN);
+        Priv::CreateWindow(SDL_WINDOW_VULKAN | SDL_WINDOW_FULLSCREEN_DESKTOP);
 #else
 		Priv::CreateWindow(SDL_WINDOW_VULKAN | SDL_WINDOW_HIDDEN | (vid_fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
 #endif
