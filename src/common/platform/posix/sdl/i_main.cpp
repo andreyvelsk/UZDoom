@@ -239,5 +239,9 @@ bool needToInvokeMouseButtonsEvents(){
     }
     return isMenuActive || StartScreenRendered;
 }
+__attribute__((used)) __attribute__((visibility("default")))
+bool needToReInitGameControllers (){
+    return false;
+}
 }
 #endif
