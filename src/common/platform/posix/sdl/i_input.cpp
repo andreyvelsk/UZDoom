@@ -61,6 +61,11 @@ CVAR (Bool,  use_mouse,				true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
 
 extern int WaitingForKey;
 
+#if ANDROID
+typedef void (*forceLandScapeActivityOrientationDelegate)();
+static forceLandScapeActivityOrientationDelegate activityOrientationChangerInstance = nullptr;
+#endif
+
 static const SDL_Keycode DIKToKeySym[256] =
 {
 	0, SDLK_ESCAPE, SDLK_1, SDLK_2, SDLK_3, SDLK_4, SDLK_5, SDLK_6,
@@ -190,6 +195,13 @@ void I_SetMouseCapture()
 #endif
 }
 
+#if ANDROID
+__attribute__((used)) __attribute__((visibility("default")))
+void registerForceLandscapeActivityOrientationCallback (forceLandScapeActivityOrientationDelegate instance) {
+    activityOrientationChangerInstance = instance;
+}
+#endif
+
 void I_ReleaseMouseCapture()
 {
 	SDL_SetRelativeMouseMode (SDL_FALSE);
@@ -249,6 +261,9 @@ void MessagePump (const SDL_Event &sev)
         case SDL_APP_WILLENTERFOREGROUND:
             S_SetSoundPaused(1);
             AppActive = true;
+            if (activityOrientationChangerInstance!= nullptr){
+                activityOrientationChangerInstance();
+            }
             break;
 
         case SDL_APP_WILLENTERBACKGROUND :
