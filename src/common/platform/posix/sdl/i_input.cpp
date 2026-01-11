@@ -248,7 +248,6 @@ void MessagePump (const SDL_Event &sev)
 	static int lastx = 0, lasty = 0;
 	int x, y;
 	event_t event = { 0,0,0,0,0,0,0 };
-    extern bool AppActive;
 
 #if ANDROID
     if (sev.type == SDL_APP_DIDENTERFOREGROUND && activityOrientationChangerInstance!= nullptr){
@@ -264,16 +263,6 @@ void MessagePump (const SDL_Event &sev)
         case SDL_WINDOWEVENT:
             extern void ProcessSDLWindowEvent(const SDL_WindowEvent &);
             ProcessSDLWindowEvent(sev.window);
-            break;
-
-        case SDL_APP_WILLENTERFOREGROUND:
-            S_SetSoundPaused(1);
-            AppActive = true;
-            break;
-
-        case SDL_APP_WILLENTERBACKGROUND :
-            S_SetSoundPaused(0);
-            AppActive = false;
             break;
 	case SDL_MOUSEBUTTONDOWN:
 	case SDL_MOUSEBUTTONUP:

@@ -65,6 +65,10 @@ extern "C" int cc_install_handlers(int, char**, int, int*, const char*, int(*)(c
 void Mac_I_FatalError(const char* errortext);
 #endif
 
+#if ANDROID
+static bool gameStarted = false;
+#endif
+
 #ifdef __linux__
 void Linux_I_FatalError(const char* errortext);
 #endif
@@ -203,7 +207,9 @@ int main (int argc, char **argv)
 #endif
 
 	I_StartupJoysticks();
-
+#if ANDROID
+    gameStarted = true;
+#endif
 	const int result = GameMain();
 
 	SDL_Quit();
@@ -216,22 +222,33 @@ int main (int argc, char **argv)
 #include "i_soundinternal.h"
 extern bool StartScreenRendered;
 bool gl_lite_shader = false;
+extern bool AppActive;
 
 extern "C"{
+__attribute__((used)) __attribute__((visibility("default")))
 void UpdateGLLiteShaderState (bool enableGLLiteShader){
     gl_lite_shader = enableGLLiteShader;
 }
 
-void resumeSound() {
+__attribute__((used)) __attribute__((visibility("default")))
+void onNativeResume() {
+    if (gameStarted) {
+        S_SetSoundPaused(1);
+        AppActive = true;
+    }
 }
-
-void pauseSound() {
+__attribute__((used)) __attribute__((visibility("default")))
+void onNativePause() {
+    if (gameStarted) {
+        S_SetSoundPaused(0);
+        AppActive = false;
+    }
 }
-
+__attribute__((used)) __attribute__((visibility("default")))
 bool needToShowScreenControls() {
     return menuactive == MENU_Off;
 }
-
+__attribute__((used)) __attribute__((visibility("default")))
 bool needToInvokeMouseButtonsEvents(){
     bool isMenuActive = menuactive!=MENU_Off;
     if (isMenuActive){
