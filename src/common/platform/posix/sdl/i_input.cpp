@@ -248,6 +248,12 @@ void MessagePump (const SDL_Event &sev)
 	event_t event = { 0,0,0,0,0,0,0 };
     extern bool AppActive;
 
+#if ANDROID
+    if (sev.type == SDL_APP_DIDENTERFOREGROUND && activityOrientationChangerInstance!= nullptr){
+        activityOrientationChangerInstance();
+    }
+#endif
+
 	switch (sev.type)
 	{
 	case SDL_QUIT:
@@ -261,9 +267,6 @@ void MessagePump (const SDL_Event &sev)
         case SDL_APP_WILLENTERFOREGROUND:
             S_SetSoundPaused(1);
             AppActive = true;
-            if (activityOrientationChangerInstance!= nullptr){
-                activityOrientationChangerInstance();
-            }
             break;
 
         case SDL_APP_WILLENTERBACKGROUND :
