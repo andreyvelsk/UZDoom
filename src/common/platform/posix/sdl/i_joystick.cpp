@@ -486,7 +486,7 @@ public:
         int virtualControllerIndex = -1;
 
         for (int i = 0; i < numJoysticks; i++) {
-            if(SDL_JoystickIsVirtual(i)){
+            if(SDL_JoystickIsVirtual(i) == SDL_TRUE){
                 virtualControllerIndex = i;
                 break;
             }

@@ -200,6 +200,10 @@ EXTERN_CVAR (Bool, show_messages)
 EXTERN_CVAR(Bool, ticker)
 EXTERN_CVAR(Bool, vid_fps)
 
+#if ANDROID
+bool engineInitialized = false;
+#endif
+
 extern bool setmodeneeded;
 extern bool demorecording;
 bool M_DemoNoPlay;	// [RH] if true, then skip any demos in the loop
@@ -3594,8 +3598,10 @@ static int D_InitGame(const FIWADInfo* iwad_info, std::vector<std::string>& allw
 		D_StartTitle ();				// start up intro loop
 		setmodeneeded = false;			// This may be set to true here, but isn't needed for a restart
 	}
-
 	staticEventManager.OnEngineInitialize();
+#if ANDROID
+    engineInitialized = true;
+#endif
 	return 0;
 }
 //==========================================================================
