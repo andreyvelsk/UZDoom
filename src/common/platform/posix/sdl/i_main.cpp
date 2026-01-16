@@ -52,12 +52,14 @@
 #include "m_argv.h"
 #include "printf.h"
 #include "version.h"
-
+#include <string>
 // MACROS ------------------------------------------------------------------
 
 // TYPES -------------------------------------------------------------------
 
 // EXTERNAL FUNCTION PROTOTYPES --------------------------------------------
+
+using namespace std;
 
 extern "C" int cc_install_handlers(int, char**, int, int*, const char*, int(*)(char*, char*));
 
@@ -67,6 +69,11 @@ void Mac_I_FatalError(const char* errortext);
 
 #ifdef __linux__
 void Linux_I_FatalError(const char* errortext);
+#endif
+
+#if ANDROID
+string g_pathToUserFolder;
+string g_pathToSDLControllerDB;
 #endif
 
 // PUBLIC FUNCTION PROTOTYPES ----------------------------------------------
@@ -160,7 +167,7 @@ int main (int argc, char **argv)
 #endif // !__APPLE__
 
 #ifdef ANDROID
-    chdir(getenv("PATH_TO_UZDOOM_USER_FOLDER"));
+    chdir(g_pathToUserFolder.c_str());
 #endif
 
 	printf(GAMENAME" %s - %s - SDL version\nCompiled on %s\n",
@@ -253,6 +260,18 @@ bool needToInvokeMouseButtonsEvents(){
 __attribute__((used)) __attribute__((visibility("default")))
 bool needToReInitGameControllers (){
     return false;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setPathToUserFolder (const char *pathToUserFolder) {
+    g_pathToUserFolder = pathToUserFolder;
+}
+
+__attribute__((used)) __attribute__((visibility("default")))
+void setPathToSDLControllerDB (const char *pathToSDLControllerDB){
+    g_pathToSDLControllerDB = pathToSDLControllerDB;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setUseGLES2_0State(const bool useGLES2_0) {
 }
 }
 #endif

@@ -572,7 +572,8 @@ void I_StartupJoysticks()
 #ifndef NO_SDL_JOYSTICK
 	if(SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) >= 0) {
 #ifdef ANDROID
-        const auto *pathToSdl2ControllerDb = getenv("PATH_TO_SDL2_CONTROLLER_DB");
+        extern std::string g_pathToSDLControllerDB;
+        const auto *pathToSdl2ControllerDb = g_pathToSDLControllerDB.c_str();
         if (SDL_GameControllerAddMappingsFromFile(pathToSdl2ControllerDb) < 0) {
             SDL_Log("Couldn't load mappings: %s\n", SDL_GetError());
         } else{

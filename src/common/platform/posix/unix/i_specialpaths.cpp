@@ -43,7 +43,11 @@
 #include "printf.h"
 #include "version.h"
 #include "zstring.h"
+#include <string>
 
+using namespace std;
+
+#ifndef ANDROID
 #ifdef __APPLE
 #define DEFGETPATH(name, var, fallback) \
 	const char * Get##name##Path()      \
@@ -69,14 +73,6 @@
 DEFGETPATH(Config, "XDG_CONFIG_HOME", "$HOME/config/settings");
 DEFGETPATH(Cache, "XDG_CACHE_HOME", "$HOME/config/cache");
 DEFGETPATH(Data, "XDG_DATA_HOME", "$HOME/config/non-packaged/data");
-#elif ANDROID
-static std::string pathToZDoomUserFolder = getenv("PATH_TO_UZDOOM_USER_FOLDER");
-static std::string pathToConfigFolder = pathToZDoomUserFolder + "/config";
-static std::string pathToCacheFolder = pathToZDoomUserFolder + "/cache";
-static std::string pathToShareFolder = pathToZDoomUserFolder +"/share";
-DEFGETPATH(Config, "XDG_CONFIG_HOME", pathToConfigFolder.c_str());
-DEFGETPATH(Cache, "XDG_CACHE_HOME", pathToCacheFolder.c_str());
-DEFGETPATH(Data, "XDG_DATA_HOME", pathToShareFolder.c_str());
 #else
 DEFGETPATH(Config, "XDG_CONFIG_HOME", "$HOME/.config");
 DEFGETPATH(Cache, "XDG_CACHE_HOME", "$HOME/.cache");
@@ -84,6 +80,27 @@ DEFGETPATH(Data, "XDG_DATA_HOME", "$HOME/.local/share");
 DEFGETPATH(Pictures, "XDG_PICTURES_DIR", "$HOME/Pictures");
 #endif
 #undef DEFGETPATH
+#else
+extern string g_pathToUserFolder;
+
+const char* GetConfigPath()
+{
+    string configPath = g_pathToUserFolder + "/config";
+    return configPath.c_str();
+}
+
+const char* GetCachePath()
+{
+    string cachePath = g_pathToUserFolder + "/cache";
+    return cachePath.c_str();
+}
+
+const char* GetDataPath()
+{
+    string sharePath = g_pathToUserFolder + "/share";
+    return sharePath.c_str();
+}
+#endif
 
 FString GetUserFile (const char *file)
 {

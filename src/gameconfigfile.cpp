@@ -214,8 +214,7 @@ FGameConfigFile::FGameConfigFile ()
 	}
 
 #ifdef ANDROID
-    const auto *pathToUZDoomModsFolder = getenv("PATH_TO_UZDOOM_MODS_FOLDER");
-    const auto *pathUZDoomUserFolder = getenv("PATH_TO_UZDOOM_USER_FOLDER");
+    extern std::string g_pathToUserFolder;
 #endif
 
 	// Set default IWAD search paths if none present
@@ -224,11 +223,6 @@ FGameConfigFile::FGameConfigFile ()
 		SetSection ("IWADSearch.Directories", true);
 		SetValueForKey ("Path", ".", true);
 		SetValueForKey ("Path", "$DOOMWADDIR", true);
-#ifdef ANDROID
-        if (strlen(pathToUZDoomModsFolder) > 0) {
-            SetValueForKey("Path", pathToUZDoomModsFolder, true);
-        }
-#endif
 		for (unsigned int i = 0; i < DefaultSearchPaths.Size(); i++)
 		{
 			SetValueForKey ("Path", DefaultSearchPaths[i].GetChars(), true);
@@ -241,10 +235,7 @@ FGameConfigFile::FGameConfigFile ()
 		SetSection ("FileSearch.Directories", true);
 		SetValueForKey ("Path", "$DOOMWADDIR", true);
 #ifdef ANDROID
-        if (strlen(pathToUZDoomModsFolder) > 0) {
-            SetValueForKey("Path", pathToUZDoomModsFolder, true);
-        }
-        SetValueForKey ("Path", pathUZDoomUserFolder, true);
+        SetValueForKey ("Path", g_pathToUserFolder.c_str(), true);
 #endif
 		for (unsigned int i = 0; i < DefaultSearchPaths.Size(); i++)
 		{
@@ -257,8 +248,8 @@ FGameConfigFile::FGameConfigFile ()
 	{
 		SetSection("SoundfontSearch.Directories", true);
 #ifdef ANDROID
-        std::string pathToSoundFonts = pathUZDoomUserFolder + std::string ("/soundfonts");
-        std::string pathToFmBanks = pathUZDoomUserFolder + std::string ("/fm_banks");
+        std::string pathToSoundFonts = g_pathToUserFolder + std::string ("/soundfonts");
+        std::string pathToFmBanks = g_pathToUserFolder + std::string ("/fm_banks");
         SetValueForKey ("Path", pathToSoundFonts.c_str(), true);
         SetValueForKey ("Path", pathToFmBanks.c_str(), true);
 #endif
