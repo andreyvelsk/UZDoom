@@ -1105,7 +1105,7 @@ SoundHandle OpenALSoundRenderer::LoadSoundRaw(uint8_t *sfxdata, int length, int 
 SoundHandle OpenALSoundRenderer::LoadSound(uint8_t *sfxdata, int length, int def_loop_start, int def_loop_end)
 {
 #ifdef ANDROID // 3D sounds are very loud without making the sound mono. This needs to be fixed because it is making all sounds mono for now..
-	bool monoize = true;
+	bool monoize = false;
 #endif
 
 	SoundHandle retval = { NULL };
