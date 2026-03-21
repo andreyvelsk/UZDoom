@@ -60,6 +60,7 @@
 
 #if ANDROID
 int harm_gl_es = HARM_GL_ES_GLES2;
+bool g_useOpenGLES = true;
 #endif
 
 #ifdef HAVE_VULKAN
@@ -260,7 +261,7 @@ namespace Priv
 		}
 #else
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-        if (gl_es) {
+        if (g_useOpenGLES) {
             if (USING_GLES_2) {
                 SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
                 SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -798,6 +799,10 @@ float GLimp_GetGLVersion(void)
 extern "C" {
 void UpdateHarmGLESVersion(int targetHarmGLESVersion) {
     harm_gl_es = targetHarmGLESVersion;
+}
+
+void UpdateUseOpenGLESState(bool useOpenGLES) {
+    g_useOpenGLES = useOpenGLES;
 }
 }
 
