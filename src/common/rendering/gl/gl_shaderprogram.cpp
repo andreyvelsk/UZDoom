@@ -268,7 +268,7 @@ FString FShaderProgram::PatchShader(ShaderType type, const FString &code, const 
 
 	int shaderVersion = min((int)round(gl.glslversion * 10) * 10, maxGlslVersion);
 #ifdef ANDROID
-	patchedCode.AppendFormat("#version 320 es\n#define NO_CLIPDISTANCE_SUPPORT\n");
+	patchedCode.AppendFormat("#version 310 es\n#define NO_CLIPDISTANCE_SUPPORT\n");
 #else
 	patchedCode.AppendFormat("#version %d\n", shaderVersion);
 #endif

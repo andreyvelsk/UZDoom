@@ -496,7 +496,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 
 #ifdef ANDROID
     bool lightbuffertype = screen->mLights->GetBufferType();
-	vp_comb.AppendFormat("#version 320 es\n#define NO_CLIPDISTANCE_SUPPORT\n#define NUM_UBO_LIGHTS %d\n#define NUM_UBO_BONES %d\n", screen->mLights->GetBlockSize(), screen->mBones->GetBlockSize());
+	vp_comb.AppendFormat("#version 310 es\n#define NO_CLIPDISTANCE_SUPPORT\n#define NUM_UBO_LIGHTS %d\n#define NUM_UBO_BONES %d\n", screen->mLights->GetBlockSize(), screen->mBones->GetBlockSize());
 #else
 	if ((gl.flags & RFL_SHADER_STORAGE_BUFFER) && screen->allowSSBO())
 		vp_comb << "#version 430 core\n#define SUPPORTS_SHADOWMAPS\n";
