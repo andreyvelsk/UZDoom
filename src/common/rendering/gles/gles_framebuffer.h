@@ -6,6 +6,11 @@
 
 #include <memory>
 
+#if ANDROID
+#include <EGL/egl.h>
+struct ANativeWindow;
+#endif
+
 namespace OpenGLESRenderer
 {
 
@@ -33,6 +38,9 @@ public:
 	void SetSceneRenderTarget(bool useSSAO) override;
 	void WaitForCommands(bool finish) override;
 	void CopyScreenToBuffer(int width, int height, uint8_t* buffer) override;
+	bool Render2DToBuffer(F2DDrawer* drawer, int width, int height, uint32_t* buffer) override;
+	void SetSecondScreenNativeWindow(void* nativeWindow, int width, int height) override;
+	bool Render2DToSecondScreen(F2DDrawer* drawer, int width, int height) override;
 	bool FlipSavePic() const override { return true; }
 
 	FRenderState* RenderState() override;
@@ -64,6 +72,16 @@ public:
 
     FTexture *WipeStartScreen() override;
     FTexture *WipeEndScreen() override;
+
+#if ANDROID
+	void DestroySecondScreenSurface();
+	bool EnsureSecondScreenSurface(EGLDisplay display, EGLContext context);
+	ANativeWindow* SecondScreenNativeWindow = nullptr;
+	EGLDisplay SecondScreenEglDisplay = nullptr;
+	EGLSurface SecondScreenEglSurface = nullptr;
+	int SecondScreenSurfaceWidth = 0;
+	int SecondScreenSurfaceHeight = 0;
+#endif
 
 	int camtexcount = 0;
 };

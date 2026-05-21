@@ -60,6 +60,12 @@
 #include "flatvertices.h"
 #include "hw_cvars.h"
 
+#include <vector>
+
+#if ANDROID
+#include <android/native_window.h>
+#endif
+
 EXTERN_CVAR (Bool, vid_vsync)
 EXTERN_CVAR(Int, gl_tonemap)
 EXTERN_CVAR(Bool, cl_capfps)
@@ -95,6 +101,10 @@ OpenGLFrameBuffer::OpenGLFrameBuffer(void *hMonitor, bool fullscreen) :
 
 OpenGLFrameBuffer::~OpenGLFrameBuffer()
 {
+#if ANDROID
+	DestroySecondScreenSurface();
+#endif
+
 	PPResource::ResetAll();
 
 	if (mVertexData != nullptr) delete mVertexData;
@@ -235,6 +245,241 @@ void OpenGLFrameBuffer::RenderTextureView(FCanvasTexture* tex, std::function<voi
 	tex->SetUpdated(true);
 	static_cast<OpenGLFrameBuffer*>(screen)->camtexcount++;
 }
+
+bool OpenGLFrameBuffer::Render2DToBuffer(F2DDrawer* drawer, int width, int height, uint32_t* buffer)
+{
+	if (GLRenderer == nullptr || drawer == nullptr || buffer == nullptr || width <= 0 || height <= 0)
+	{
+		return false;
+	}
+
+	FCanvasTexture texture(width, height);
+	GLRenderer->StartOffscreen();
+	GLRenderer->BindToFrameBuffer(&texture);
+
+	glViewport(0, 0, width, height);
+	glDisable(GL_SCISSOR_TEST);
+	glClearColor(0.f, 0.f, 0.f, 1.f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	::Draw2D(drawer, gl_RenderState, 0, 0, width, height);
+	glFinish();
+
+	TArray<uint8_t> pixels;
+	pixels.Resize(width * height * 4);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.Data());
+	glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
+	GLRenderer->EndOffscreen();
+	gl_RenderState.ClearLastMaterial();
+
+	for (int y = 0; y < height; ++y)
+	{
+		const int sourceY = height - y - 1;
+		for (int x = 0; x < width; ++x)
+		{
+			const uint8_t* source = pixels.Data() + ((sourceY * width + x) * 4);
+			buffer[y * width + x] =
+				(0xffu << 24) |
+				(uint32_t(source[0]) << 16) |
+				(uint32_t(source[1]) << 8) |
+				uint32_t(source[2]);
+		}
+	}
+
+	return true;
+}
+
+#if ANDROID
+static EGLConfig FindCurrentEglConfig(EGLDisplay display, EGLContext context)
+{
+	EGLint configId = 0;
+	if (display == nullptr || context == nullptr || !eglQueryContext(display, context, EGL_CONFIG_ID, &configId))
+	{
+		return nullptr;
+	}
+
+	EGLint configCount = 0;
+	if (!eglGetConfigs(display, nullptr, 0, &configCount) || configCount <= 0)
+	{
+		return nullptr;
+	}
+
+	std::vector<EGLConfig> configs(configCount);
+	if (!eglGetConfigs(display, configs.data(), configCount, &configCount))
+	{
+		return nullptr;
+	}
+
+	for (int i = 0; i < configCount; ++i)
+	{
+		EGLint currentConfigId = 0;
+		if (eglGetConfigAttrib(display, configs[i], EGL_CONFIG_ID, &currentConfigId) && currentConfigId == configId)
+		{
+			return configs[i];
+		}
+	}
+
+	return nullptr;
+}
+
+void OpenGLFrameBuffer::DestroySecondScreenSurface()
+{
+	if (SecondScreenEglSurface != nullptr && SecondScreenEglDisplay != nullptr)
+	{
+		eglDestroySurface(SecondScreenEglDisplay, SecondScreenEglSurface);
+	}
+
+	SecondScreenEglDisplay = nullptr;
+	SecondScreenEglSurface = nullptr;
+}
+
+void OpenGLFrameBuffer::SetSecondScreenNativeWindow(void* nativeWindow, int width, int height)
+{
+	ANativeWindow* nextWindow = static_cast<ANativeWindow*>(nativeWindow);
+	width = width > 0 ? width : 0;
+	height = height > 0 ? height : 0;
+
+	if (SecondScreenNativeWindow == nextWindow && SecondScreenSurfaceWidth == width && SecondScreenSurfaceHeight == height)
+	{
+		return;
+	}
+
+	DestroySecondScreenSurface();
+	SecondScreenNativeWindow = nextWindow;
+	SecondScreenSurfaceWidth = width;
+	SecondScreenSurfaceHeight = height;
+}
+
+bool OpenGLFrameBuffer::EnsureSecondScreenSurface(EGLDisplay display, EGLContext context)
+{
+	if (SecondScreenNativeWindow == nullptr || SecondScreenSurfaceWidth <= 0 || SecondScreenSurfaceHeight <= 0 ||
+		display == nullptr || context == nullptr)
+	{
+		return false;
+	}
+
+	if (SecondScreenEglSurface != nullptr && SecondScreenEglDisplay == display)
+	{
+		return true;
+	}
+
+	DestroySecondScreenSurface();
+	EGLConfig config = FindCurrentEglConfig(display, context);
+	if (config == nullptr)
+	{
+		return false;
+	}
+
+	ANativeWindow_setBuffersGeometry(SecondScreenNativeWindow, SecondScreenSurfaceWidth, SecondScreenSurfaceHeight, 0);
+	SecondScreenEglSurface = eglCreateWindowSurface(display, config, SecondScreenNativeWindow, nullptr);
+	if (SecondScreenEglSurface == nullptr)
+	{
+		SecondScreenEglDisplay = nullptr;
+		return false;
+	}
+
+	SecondScreenEglDisplay = display;
+
+	EGLint eglWidth = 0;
+	EGLint eglHeight = 0;
+	if (eglQuerySurface(display, SecondScreenEglSurface, EGL_WIDTH, &eglWidth) && eglWidth > 0)
+	{
+		SecondScreenSurfaceWidth = eglWidth;
+	}
+	if (eglQuerySurface(display, SecondScreenEglSurface, EGL_HEIGHT, &eglHeight) && eglHeight > 0)
+	{
+		SecondScreenSurfaceHeight = eglHeight;
+	}
+
+	return true;
+}
+
+bool OpenGLFrameBuffer::Render2DToSecondScreen(F2DDrawer* drawer, int width, int height)
+{
+	if (GLRenderer == nullptr || drawer == nullptr || width <= 0 || height <= 0 || SecondScreenNativeWindow == nullptr)
+	{
+		return false;
+	}
+
+	EGLDisplay display = eglGetCurrentDisplay();
+	EGLContext context = eglGetCurrentContext();
+	if (!EnsureSecondScreenSurface(display, context))
+	{
+		return false;
+	}
+
+	EGLSurface previousDrawSurface = eglGetCurrentSurface(EGL_DRAW);
+	EGLSurface previousReadSurface = eglGetCurrentSurface(EGL_READ);
+	GLint previousFramebuffer = 0;
+	GLint previousViewport[4] = { 0, 0, 0, 0 };
+	GLint previousScissor[4] = { 0, 0, 0, 0 };
+	GLfloat previousClearColor[4] = { 0.f, 0.f, 0.f, 0.f };
+	GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+	glGetIntegerv(GL_VIEWPORT, previousViewport);
+	glGetIntegerv(GL_SCISSOR_BOX, previousScissor);
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, previousClearColor);
+
+	if (!eglMakeCurrent(display, SecondScreenEglSurface, SecondScreenEglSurface, context))
+	{
+		return false;
+	}
+
+	const float frameAspect = float(width) / float(height);
+	int destinationWidth = SecondScreenSurfaceWidth;
+	int destinationHeight = int(float(destinationWidth) / frameAspect + 0.5f);
+	if (destinationHeight > SecondScreenSurfaceHeight)
+	{
+		destinationHeight = SecondScreenSurfaceHeight;
+		destinationWidth = int(float(destinationHeight) * frameAspect + 0.5f);
+	}
+	const int destinationX = (SecondScreenSurfaceWidth - destinationWidth) / 2;
+	const int destinationY = 0;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, SecondScreenSurfaceWidth, SecondScreenSurfaceHeight);
+	glDisable(GL_SCISSOR_TEST);
+	glClearColor(0.f, 0.f, 0.f, 1.f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	::Draw2D(drawer, gl_RenderState, destinationX, destinationY, destinationWidth, destinationHeight);
+	glFlush();
+	const bool swapped = eglSwapBuffers(display, SecondScreenEglSurface) == EGL_TRUE;
+
+	eglMakeCurrent(display, previousDrawSurface, previousReadSurface, context);
+	glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
+	glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+	glScissor(previousScissor[0], previousScissor[1], previousScissor[2], previousScissor[3]);
+	if (scissorWasEnabled)
+	{
+		glEnable(GL_SCISSOR_TEST);
+	}
+	else
+	{
+		glDisable(GL_SCISSOR_TEST);
+	}
+	glClearColor(previousClearColor[0], previousClearColor[1], previousClearColor[2], previousClearColor[3]);
+	gl_RenderState.ClearLastMaterial();
+
+	if (!swapped)
+	{
+		DestroySecondScreenSurface();
+	}
+
+	return swapped;
+}
+#else
+void OpenGLFrameBuffer::SetSecondScreenNativeWindow(void* nativeWindow, int width, int height)
+{
+}
+
+bool OpenGLFrameBuffer::Render2DToSecondScreen(F2DDrawer* drawer, int width, int height)
+{
+	return false;
+}
+#endif
 
 //===========================================================================
 //

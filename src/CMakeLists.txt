@@ -1317,7 +1317,7 @@ endif()
 if (NOT ANDROID)
     target_link_libraries( zdoom ${PROJECT_LIBRARIES} lzma ${ZMUSIC_LIBRARIES} )
 else ()
-    target_link_libraries( zdoom ${PROJECT_LIBRARIES} lzma ${ZMUSIC_LIBRARIES} EGL )
+	target_link_libraries( zdoom ${PROJECT_LIBRARIES} lzma ${ZMUSIC_LIBRARIES} EGL android )
 endif ()
 include_directories(
 	BEFORE

@@ -42,6 +42,16 @@
 #include "engineerrors.h"
 
 #include "i_time.h"
+#include <atomic>
+#include <cstring>
+#include <mutex>
+#include <vector>
+
+#if ANDROID
+#include <jni.h>
+#include <android/native_window_jni.h>
+#endif
+
 #include "d_gui.h"
 #include "m_random.h"
 #include "doomdef.h"
@@ -203,6 +213,337 @@ EXTERN_CVAR(Bool, vid_fps)
 #if ANDROID
 bool engineInitialized = false;
 #endif
+
+static std::atomic_bool uzSecondScreenHudRequested { false };
+static bool uzSecondScreenHudApplied = false;
+static int uzSecondScreenSavedScreenBlocks = 10;
+static constexpr int uzSecondScreenHudRenderWidth = 320;
+static constexpr int uzSecondScreenHudRenderHeight = 200;
+static FLevelLocals* uzSecondScreenMapStartedLevel = nullptr;
+static int uzSecondScreenMapStartedWidth = 0;
+static int uzSecondScreenMapStartedHeight = 0;
+static std::mutex uzSecondScreenHudFrameMutex;
+static std::vector<uint32_t> uzSecondScreenHudFrame;
+static int uzSecondScreenHudFrameWidth = 0;
+static int uzSecondScreenHudFrameHeight = 0;
+static bool uzSecondScreenHudFrameReady = false;
+
+#if ANDROID
+static std::mutex uzSecondScreenHudSurfaceMutex;
+static ANativeWindow* uzSecondScreenHudPendingWindow = nullptr;
+static int uzSecondScreenHudPendingWidth = 0;
+static int uzSecondScreenHudPendingHeight = 0;
+static bool uzSecondScreenHudSurfacePending = false;
+static ANativeWindow* uzSecondScreenHudActiveWindow = nullptr;
+static int uzSecondScreenHudSurfaceWidth = 0;
+static int uzSecondScreenHudSurfaceHeight = 0;
+
+static void D_SetSecondScreenHudPendingWindow(ANativeWindow* window, int width, int height)
+{
+	std::lock_guard<std::mutex> lock(uzSecondScreenHudSurfaceMutex);
+	if (uzSecondScreenHudPendingWindow != nullptr)
+	{
+		ANativeWindow_release(uzSecondScreenHudPendingWindow);
+	}
+	uzSecondScreenHudPendingWindow = window;
+	uzSecondScreenHudPendingWidth = width > 0 ? width : 0;
+	uzSecondScreenHudPendingHeight = height > 0 ? height : 0;
+	uzSecondScreenHudSurfacePending = true;
+}
+
+static void D_UpdateSecondScreenHudSurface()
+{
+	ANativeWindow* windowToRelease = nullptr;
+	ANativeWindow* activeWindow = nullptr;
+	int activeWidth = 0;
+	int activeHeight = 0;
+	bool changed = false;
+
+	{
+		std::lock_guard<std::mutex> lock(uzSecondScreenHudSurfaceMutex);
+		if (uzSecondScreenHudSurfacePending)
+		{
+			windowToRelease = uzSecondScreenHudActiveWindow;
+			uzSecondScreenHudActiveWindow = uzSecondScreenHudPendingWindow;
+			uzSecondScreenHudSurfaceWidth = uzSecondScreenHudPendingWidth;
+			uzSecondScreenHudSurfaceHeight = uzSecondScreenHudPendingHeight;
+			uzSecondScreenHudPendingWindow = nullptr;
+			uzSecondScreenHudPendingWidth = 0;
+			uzSecondScreenHudPendingHeight = 0;
+			uzSecondScreenHudSurfacePending = false;
+			changed = true;
+		}
+
+		activeWindow = uzSecondScreenHudActiveWindow;
+		activeWidth = uzSecondScreenHudSurfaceWidth;
+		activeHeight = uzSecondScreenHudSurfaceHeight;
+	}
+
+	if (changed && screen != nullptr)
+	{
+		screen->SetSecondScreenNativeWindow(activeWindow, activeWidth, activeHeight);
+	}
+
+	if (windowToRelease != nullptr)
+	{
+		ANativeWindow_release(windowToRelease);
+	}
+}
+#endif
+
+static void D_UpdateSecondScreenHudMode()
+{
+	const bool requested = uzSecondScreenHudRequested.load(std::memory_order_relaxed);
+	if (requested == uzSecondScreenHudApplied)
+	{
+		return;
+	}
+
+	if (requested)
+	{
+		uzSecondScreenSavedScreenBlocks = screenblocks;
+		screenblocks = 12;
+		R_SetViewSize(12);
+		uzSecondScreenHudApplied = true;
+	}
+	else
+	{
+		screenblocks = uzSecondScreenSavedScreenBlocks;
+		R_SetViewSize(screenblocks);
+		uzSecondScreenHudApplied = false;
+	}
+}
+
+extern "C" __attribute__((used)) __attribute__((visibility("default")))
+void SetSecondScreenHudEnabled(const bool enabled)
+{
+	uzSecondScreenHudRequested.store(enabled, std::memory_order_relaxed);
+	if (!enabled)
+	{
+		#if ANDROID
+		D_SetSecondScreenHudPendingWindow(nullptr, 0, 0);
+		#endif
+
+		std::lock_guard<std::mutex> lock(uzSecondScreenHudFrameMutex);
+		uzSecondScreenHudFrameReady = false;
+		uzSecondScreenHudFrameWidth = 0;
+		uzSecondScreenHudFrameHeight = 0;
+		uzSecondScreenHudFrame.clear();
+		uzSecondScreenMapStartedLevel = nullptr;
+		uzSecondScreenMapStartedWidth = 0;
+		uzSecondScreenMapStartedHeight = 0;
+	}
+}
+
+#if ANDROID
+extern "C" JNIEXPORT void JNICALL
+Java_com_mobilerpgpack_phone_engine_engineinfo_uzdoom_UZDoomSecondScreenSurfaceBridge_setSecondScreenHudSurface(
+	JNIEnv* env,
+	jobject,
+	jobject surface,
+	jint width,
+	jint height)
+{
+	ANativeWindow* window = surface != nullptr ? ANativeWindow_fromSurface(env, surface) : nullptr;
+	if (window == nullptr || width <= 0 || height <= 0)
+	{
+		if (window != nullptr)
+		{
+			ANativeWindow_release(window);
+		}
+		D_SetSecondScreenHudPendingWindow(nullptr, 0, 0);
+		return;
+	}
+
+	D_SetSecondScreenHudPendingWindow(window, width, height);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mobilerpgpack_phone_engine_engineinfo_uzdoom_UZDoomSecondScreenSurfaceBridge_clearSecondScreenHudSurface(
+	JNIEnv*,
+	jobject)
+{
+	D_SetSecondScreenHudPendingWindow(nullptr, 0, 0);
+}
+#endif
+
+extern "C" __attribute__((used)) __attribute__((visibility("default")))
+const char* GetSecondScreenHudState()
+{
+	static char state[128];
+
+	if (gamestate != GS_LEVEL && gamestate != GS_TITLELEVEL)
+	{
+		snprintf(state, sizeof(state), "ready=0");
+		return state;
+	}
+
+	player_t& player = players[consoleplayer];
+	if (player.mo == nullptr)
+	{
+		snprintf(state, sizeof(state), "ready=0");
+		return state;
+	}
+
+	AActor* ammo1 = nullptr;
+	AActor* ammo2 = nullptr;
+	if (player.ReadyWeapon != nullptr)
+	{
+		ammo1 = player.ReadyWeapon->PointerVar<AActor>(NAME_Ammo1);
+		ammo2 = player.ReadyWeapon->PointerVar<AActor>(NAME_Ammo2);
+		if (ammo1 == nullptr)
+		{
+			ammo1 = ammo2;
+		}
+	}
+
+	const int ammo = ammo1 != nullptr ? ammo1->IntVar(NAME_Amount) : 0;
+	const int health = player.mo->health;
+	AActor* armor = player.mo->FindInventory(NAME_BasicArmor, true);
+	const int armorAmount = armor != nullptr ? armor->IntVar(NAME_Amount) : 0;
+	const char* face = "normal";
+
+	if (player.playerstate == PST_DEAD || health <= 0)
+	{
+		face = "dead";
+	}
+	else if ((player.cheats & (CF_GODMODE | CF_GODMODE2)) || (player.mo->flags2 & MF2_INVULNERABLE))
+	{
+		face = "god";
+	}
+	else if (player.damagecount > 0)
+	{
+		face = "ouch";
+	}
+	else if (health < 25)
+	{
+		face = "critical";
+	}
+	else if (health < 60)
+	{
+		face = "hurt";
+	}
+
+	snprintf(
+		state,
+		sizeof(state),
+		"ready=1;health=%d;armor=%d;ammo=%d;face=%s",
+		health,
+		armorAmount,
+		ammo,
+		face
+	);
+	return state;
+}
+
+static void D_RenderSecondScreenMapFrame()
+{
+	#if ANDROID
+	D_UpdateSecondScreenHudSurface();
+	if (screen != nullptr)
+	{
+		screen->SetSecondScreenNativeWindow(
+			uzSecondScreenHudActiveWindow,
+			uzSecondScreenHudSurfaceWidth,
+			uzSecondScreenHudSurfaceHeight
+		);
+	}
+	if (uzSecondScreenHudActiveWindow == nullptr)
+	{
+		return;
+	}
+	#endif
+
+	if (!uzSecondScreenHudApplied || screen == nullptr || hud_toggled || gamestate != GS_LEVEL ||
+		primaryLevel == nullptr || primaryLevel->automap == nullptr)
+	{
+		return;
+	}
+
+	F2DDrawer mapDrawer;
+	F2DDrawer* savedDrawer = twod;
+	const bool savedAutomapActive = automapactive;
+	const bool savedViewActive = viewactive;
+	int mapSourceWidth = uzSecondScreenHudRenderWidth;
+	int mapSourceHeight = uzSecondScreenHudRenderHeight;
+	#if ANDROID
+	if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
+	{
+		mapSourceHeight = int(double(mapSourceWidth) * double(uzSecondScreenHudSurfaceHeight) / double(uzSecondScreenHudSurfaceWidth) + 0.5);
+		if (mapSourceHeight < 1)
+		{
+			mapSourceHeight = 1;
+		}
+	}
+	#endif
+
+	mapDrawer.Begin(mapSourceWidth, mapSourceHeight);
+	mapDrawer.ClearClipRect();
+	twod = &mapDrawer;
+	if (uzSecondScreenMapStartedLevel != primaryLevel ||
+		uzSecondScreenMapStartedWidth != mapSourceWidth ||
+		uzSecondScreenMapStartedHeight != mapSourceHeight)
+	{
+		primaryLevel->automap->startDisplay();
+		uzSecondScreenMapStartedLevel = primaryLevel;
+		uzSecondScreenMapStartedWidth = mapSourceWidth;
+		uzSecondScreenMapStartedHeight = mapSourceHeight;
+	}
+	automapactive = true;
+	viewactive = false;
+	primaryLevel->automap->Drawer(mapSourceHeight);
+	mapDrawer.End();
+	automapactive = savedAutomapActive;
+	viewactive = savedViewActive;
+
+	twod = savedDrawer;
+
+	if (screen->Render2DToSecondScreen(&mapDrawer, mapSourceWidth, mapSourceHeight))
+	{
+		return;
+	}
+
+	std::vector<uint32_t> renderedFrame(mapSourceWidth * mapSourceHeight);
+	if (!screen->Render2DToBuffer(&mapDrawer, mapSourceWidth, mapSourceHeight, renderedFrame.data()))
+	{
+		return;
+	}
+
+	std::lock_guard<std::mutex> lock(uzSecondScreenHudFrameMutex);
+	uzSecondScreenHudFrameWidth = mapSourceWidth;
+	uzSecondScreenHudFrameHeight = mapSourceHeight;
+	uzSecondScreenHudFrame.resize(uzSecondScreenHudFrameWidth * uzSecondScreenHudFrameHeight);
+	std::memcpy(uzSecondScreenHudFrame.data(), renderedFrame.data(), uzSecondScreenHudFrame.size() * sizeof(uint32_t));
+	uzSecondScreenHudFrameReady = true;
+}
+
+extern "C" __attribute__((used)) __attribute__((visibility("default")))
+int GetSecondScreenHudFrameWidth()
+{
+	std::lock_guard<std::mutex> lock(uzSecondScreenHudFrameMutex);
+	return uzSecondScreenHudFrameReady ? uzSecondScreenHudFrameWidth : 0;
+}
+
+extern "C" __attribute__((used)) __attribute__((visibility("default")))
+int GetSecondScreenHudFrameHeight()
+{
+	std::lock_guard<std::mutex> lock(uzSecondScreenHudFrameMutex);
+	return uzSecondScreenHudFrameReady ? uzSecondScreenHudFrameHeight : 0;
+}
+
+extern "C" __attribute__((used)) __attribute__((visibility("default")))
+int CopySecondScreenHudFrame(int32_t* target, const int maxPixels)
+{
+	std::lock_guard<std::mutex> lock(uzSecondScreenHudFrameMutex);
+	const int pixelCount = uzSecondScreenHudFrameWidth * uzSecondScreenHudFrameHeight;
+	if (!uzSecondScreenHudFrameReady || target == nullptr || maxPixels < pixelCount || pixelCount <= 0)
+	{
+		return 0;
+	}
+
+	std::memcpy(target, uzSecondScreenHudFrame.data(), pixelCount * sizeof(uint32_t));
+	return pixelCount;
+}
 
 extern bool setmodeneeded;
 extern bool demorecording;
@@ -1008,6 +1349,7 @@ void D_Display ()
 	screen->FrameTime = I_msTimeFS();
 	TexAnim.UpdateAnimations(screen->FrameTime);
 	R_UpdateSky(screen->FrameTime);
+	D_UpdateSecondScreenHudMode();
 	screen->BeginFrame();
 	twod->ClearClipRect();
 	if ((gamestate == GS_LEVEL || gamestate == GS_TITLELEVEL) && gametic != 0)
@@ -1152,6 +1494,7 @@ void D_Display ()
 	{
 		if (wipestart != nullptr) wipestart->DecRef();
 		wipestart = nullptr;
+		D_RenderSecondScreenMapFrame();
 		DrawOverlays();
 		End2DAndUpdate ();
 	}
