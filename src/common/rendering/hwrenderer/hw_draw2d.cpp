@@ -42,6 +42,7 @@
 #include "hw_renderstate.h"
 #include "r_videoscale.h"
 #include "v_draw.h"
+#include "printf.h"
 
 //===========================================================================
 // 
@@ -128,13 +129,63 @@ void Draw2D(F2DDrawer* drawer, FRenderState& state, int x, int y, int width, int
 		{
 			// scissor test doesn't use the current viewport for the coordinates, so use real screen coordinates
 			// Note that the origin here is the lower left corner!
-			sciX = screen->ScreenToWindowX(cmd.mScissor[0]);
-			sciY = screen->ScreenToWindowY(cmd.mScissor[3]);
-			sciW = screen->ScreenToWindowX(cmd.mScissor[2]) - sciX;
-			sciH = screen->ScreenToWindowY(cmd.mScissor[1]) - sciY;
-			// If coordinates turn out negative, clip to sceen here to avoid undefined behavior. 
-			if (sciX < 0) sciW += sciX, sciX = 0;
-			if (sciY < 0) sciH += sciY, sciY = 0;
+			// Convert from drawer (zdoom screen) coordinates to the supplied viewport/window
+			// coordinates. We can't use screen->ScreenToWindowX/Y here because that always
+			// references the primary framebuffer's mScreenViewport/mGameScreenWidth. When this
+			// function is invoked for an off-screen surface (e.g. the second-display lower HUD),
+			// using the primary viewport produces wildly out-of-range scissor rectangles which
+			// clip away most of the drawn content and causes severe flicker / disappearing
+			// graphics whenever the source emits many DTA_Clip* commands (statusbar, counters).
+			//
+			// Callers frequently pass huge sentinel values (~INT_MAX/2) for "no clip" on a given
+			// axis. Multiplying those by the destination dimension overflows int32 unless the
+			// drawer/destination ratio is close to 1:1. Do the math in int64_t and clamp the
+			// final rectangle to the destination viewport so that "no clip" sentinels collapse
+			// to the full viewport instead of producing a wildly negative or empty box.
+			const int64_t drawerW = drawer->GetWidth() > 0 ? drawer->GetWidth() : 1;
+			const int64_t drawerH = drawer->GetHeight() > 0 ? drawer->GetHeight() : 1;
+			const int64_t vpX = x;
+			const int64_t vpY = y;
+			const int64_t vpW = width;
+			const int64_t vpH = height;
+			auto toWinX = [&](int64_t sx) -> int64_t { return vpX + (sx * vpW) / drawerW; };
+			auto toWinY = [&](int64_t sy) -> int64_t { return vpY + vpH - (sy * vpH) / drawerH; };
+			// GZDoom / ZScript pass huge sentinel values (~INT_MAX or INT_MAX/2,
+			// sometimes offset by a frame dimension) to mean "no clip on this axis".
+			// We must detect these BEFORE scaling, otherwise after Y-flip they collapse
+			// into a zero-height rectangle and silently cull whole HUD elements (the
+			// root cause of the second-screen lower-HUD flicker: every other frame
+			// the statusbar geometry overflows the drawer's virtual screen, triggers
+			// DTF_Scissor, and the sentinel values produce an empty scissor).
+			constexpr int64_t kScissorSentinel = (int64_t)1 << 28; // ~268M; real coords are << 1<<20
+			auto isSentinel = [&](int v) -> bool {
+				return (int64_t)v >  kScissorSentinel || (int64_t)v < -kScissorSentinel;
+			};
+			const bool noL = isSentinel(cmd.mScissor[0]);
+			const bool noT = isSentinel(cmd.mScissor[1]);
+			const bool noR = isSentinel(cmd.mScissor[2]);
+			const bool noB = isSentinel(cmd.mScissor[3]);
+			const int64_t vpRight = vpX + vpW;
+			const int64_t vpTop   = vpY + vpH;
+			int64_t left   = noL ? vpX     : toWinX((int64_t)cmd.mScissor[0]);
+			int64_t right  = noR ? vpRight : toWinX((int64_t)cmd.mScissor[2]);
+			// scissor uses drawer-bottom-up Y after Y-flip:
+			// drawer top    -> high GL Y, drawer bottom -> low GL Y.
+			int64_t bottom = noB ? vpY     : toWinY((int64_t)cmd.mScissor[3]);
+			int64_t top    = noT ? vpTop   : toWinY((int64_t)cmd.mScissor[1]);
+			// Clamp to viewport.
+			if (left   < vpX)     left   = vpX;
+			if (left   > vpRight) left   = vpRight;
+			if (right  < vpX)     right  = vpX;
+			if (right  > vpRight) right  = vpRight;
+			if (bottom < vpY)     bottom = vpY;
+			if (bottom > vpTop)   bottom = vpTop;
+			if (top    < vpY)     top    = vpY;
+			if (top    > vpTop)   top    = vpTop;
+			sciX = (int)left;
+			sciY = (int)bottom;
+			sciW = (int)(right - left);
+			sciH = (int)(top - bottom);
 		}
 		else
 		{
@@ -263,4 +314,5 @@ void Draw2D(F2DDrawer* drawer, FRenderState& state, int x, int y, int width, int
 	state.ResetColor();
 	drawer->mIsFirstPass = false;
 	twoD.Unclock();
+
 }

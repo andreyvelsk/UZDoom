@@ -446,7 +446,8 @@ bool OpenGLFrameBuffer::Render2DToSecondScreen(F2DDrawer* drawer, int width, int
 
 	::Draw2D(drawer, gl_RenderState, destinationX, destinationY, destinationWidth, destinationHeight);
 	glFlush();
-	const bool swapped = eglSwapBuffers(display, SecondScreenEglSurface) == EGL_TRUE;
+	const EGLBoolean swapResult = eglSwapBuffers(display, SecondScreenEglSurface);
+	const bool swapped = swapResult == EGL_TRUE;
 
 	eglMakeCurrent(display, previousDrawSurface, previousReadSurface, context);
 	glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);

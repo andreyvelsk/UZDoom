@@ -436,9 +436,11 @@ const char* GetSecondScreenHudState()
 	return state;
 }
 
-static void D_RenderSecondScreenMapFrame()
+static void D_DrawLevelAutomapLayer(sector_t* viewsec, double ticFrac);
+
+static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 {
-	#if ANDROID
+#if ANDROID
 	D_UpdateSecondScreenHudSurface();
 	if (screen != nullptr)
 	{
@@ -448,38 +450,41 @@ static void D_RenderSecondScreenMapFrame()
 			uzSecondScreenHudSurfaceHeight
 		);
 	}
-	if (uzSecondScreenHudActiveWindow == nullptr)
-	{
-		return;
-	}
-	#endif
+	if (uzSecondScreenHudActiveWindow == nullptr) { return; }
+#endif
 
-	if (!uzSecondScreenHudApplied || screen == nullptr || hud_toggled || gamestate != GS_LEVEL ||
+	if (!uzSecondScreenHudApplied || StatusBar == nullptr || screen == nullptr || hud_toggled || gamestate != GS_LEVEL ||
 		primaryLevel == nullptr || primaryLevel->automap == nullptr)
 	{
 		return;
 	}
 
-	F2DDrawer mapDrawer;
+	// Persistent heap drawer — avoids uninitialised stack fields (offset, Width/Height)
+	// that caused per-frame flicker at large surface dimensions.
+	static F2DDrawer* sMapDrawer = nullptr;
+	if (sMapDrawer == nullptr) sMapDrawer = new F2DDrawer();
+	F2DDrawer& mapDrawer = *sMapDrawer;
+	mapDrawer.Clear();
 	F2DDrawer* savedDrawer = twod;
 	const bool savedAutomapActive = automapactive;
 	const bool savedViewActive = viewactive;
 	int mapSourceWidth = uzSecondScreenHudRenderWidth;
 	int mapSourceHeight = uzSecondScreenHudRenderHeight;
-	#if ANDROID
+#if ANDROID
 	if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
 	{
-		mapSourceHeight = int(double(mapSourceWidth) * double(uzSecondScreenHudSurfaceHeight) / double(uzSecondScreenHudSurfaceWidth) + 0.5);
-		if (mapSourceHeight < 1)
-		{
-			mapSourceHeight = 1;
-		}
+		mapSourceWidth = uzSecondScreenHudSurfaceWidth;
+		mapSourceHeight = uzSecondScreenHudSurfaceHeight;
 	}
-	#endif
-
+#endif
+	if (mapSourceWidth <= 0 || mapSourceHeight <= 0) { return; }
 	mapDrawer.Begin(mapSourceWidth, mapSourceHeight);
 	mapDrawer.ClearClipRect();
+	mapDrawer.ClearTransform();
+	mapDrawer.SetOffset(DVector2(0.0, 0.0));
+	mapDrawer.SetScreenFade(1.f);
 	twod = &mapDrawer;
+	StatusBar->SetScale();
 	if (uzSecondScreenMapStartedLevel != primaryLevel ||
 		uzSecondScreenMapStartedWidth != mapSourceWidth ||
 		uzSecondScreenMapStartedHeight != mapSourceHeight)
@@ -491,12 +496,13 @@ static void D_RenderSecondScreenMapFrame()
 	}
 	automapactive = true;
 	viewactive = false;
-	primaryLevel->automap->Drawer(mapSourceHeight);
+	D_DrawLevelAutomapLayer(viewsec, ticFrac);
 	mapDrawer.End();
 	automapactive = savedAutomapActive;
 	viewactive = savedViewActive;
 
 	twod = savedDrawer;
+	StatusBar->SetScale();
 
 	if (screen->Render2DToSecondScreen(&mapDrawer, mapSourceWidth, mapSourceHeight))
 	{
@@ -682,6 +688,55 @@ cycle_t FrameCycles;
 
 // [SP] Store the capabilities of the renderer in a global variable, to prevent excessive per-frame processing
 uint32_t r_renderercaps = 0;
+
+static void D_DrawLevelAutomapLayer(sector_t* viewsec, double ticFrac)
+{
+	if (StatusBar == nullptr)
+	{
+		return;
+	}
+
+	V_DrawBlend(viewsec);
+	if (automapactive && primaryLevel != nullptr && primaryLevel->automap != nullptr)
+	{
+		primaryLevel->automap->Drawer((hud_althud && viewheight == SCREENHEIGHT) ? viewheight : StatusBar->GetTopOfStatusbar());
+	}
+
+	// for timing the statusbar code.
+	//cycle_t stb;
+	//stb.Reset();
+	//stb.Clock();
+	if (!automapactive || viewactive)
+	{
+		StatusBar->RefreshViewBorder();
+	}
+	if (hud_althud && viewheight == SCREENHEIGHT && screenblocks > 10)
+	{
+		StatusBar->DrawBottomStuff(HUD_AltHud);
+		if (DrawFSHUD || automapactive) StatusBar->DrawAltHUD();
+		if (players[consoleplayer].camera && players[consoleplayer].camera->player && !automapactive)
+		{
+			StatusBar->DrawCrosshair(ticFrac);
+		}
+		StatusBar->CallDraw(HUD_AltHud, ticFrac);
+		StatusBar->DrawTopStuff(HUD_AltHud);
+	}
+	else if (viewheight == SCREENHEIGHT && viewactive && screenblocks > 10)
+	{
+		EHudState state = DrawFSHUD ? HUD_Fullscreen : HUD_None;
+		StatusBar->DrawBottomStuff(state);
+		StatusBar->CallDraw(state, ticFrac);
+		StatusBar->DrawTopStuff(state);
+	}
+	else
+	{
+		StatusBar->DrawBottomStuff(HUD_StatusBar);
+		StatusBar->CallDraw(HUD_StatusBar, ticFrac);
+		StatusBar->DrawTopStuff(HUD_StatusBar);
+	}
+	//stb.Unclock();
+	//Printf("Stbar = %f\n", stb.TimeMS());
+}
 
 
 // PRIVATE DATA DEFINITIONS ------------------------------------------------
@@ -1247,7 +1302,7 @@ void D_Display ()
 {
 	FTexture *wipestart = nullptr;
 	int wipe_type;
-	sector_t *viewsec;
+	sector_t *viewsec = nullptr;
 
 	if (nodrawers || screen == NULL)
 		return; 				// for comparative timing / profiling
@@ -1366,46 +1421,7 @@ void D_Display ()
 		twod->Begin(screen->GetWidth(), screen->GetHeight());
 		if (!hud_toggled)
 		{
-			V_DrawBlend(viewsec);
-			if (automapactive)
-			{
-				primaryLevel->automap->Drawer ((hud_althud && viewheight == SCREENHEIGHT) ? viewheight : StatusBar->GetTopOfStatusbar());
-			}
-		
-			// for timing the statusbar code.
-			//cycle_t stb;
-			//stb.Reset();
-			//stb.Clock();
-			if (!automapactive || viewactive)
-			{
-				StatusBar->RefreshViewBorder ();
-			}
-			if (hud_althud && viewheight == SCREENHEIGHT && screenblocks > 10)
-			{
-				StatusBar->DrawBottomStuff (HUD_AltHud);
-				if (DrawFSHUD || automapactive) StatusBar->DrawAltHUD();
-				if (players[consoleplayer].camera && players[consoleplayer].camera->player && !automapactive)
-				{
-					StatusBar->DrawCrosshair(vp.TicFrac);
-				}
-				StatusBar->CallDraw (HUD_AltHud, vp.TicFrac);
-				StatusBar->DrawTopStuff (HUD_AltHud);
-			}
-			else if (viewheight == SCREENHEIGHT && viewactive && screenblocks > 10)
-			{
-				EHudState state = DrawFSHUD ? HUD_Fullscreen : HUD_None;
-				StatusBar->DrawBottomStuff (state);
-				StatusBar->CallDraw (state, vp.TicFrac);
-				StatusBar->DrawTopStuff (state);
-			}
-			else
-			{
-				StatusBar->DrawBottomStuff (HUD_StatusBar);
-				StatusBar->CallDraw (HUD_StatusBar, vp.TicFrac);
-				StatusBar->DrawTopStuff (HUD_StatusBar);
-			}
-			//stb.Unclock();
-			//Printf("Stbar = %f\n", stb.TimeMS());
+			D_DrawLevelAutomapLayer(viewsec, vp.TicFrac);
 		}
 	}
 	else
@@ -1494,7 +1510,7 @@ void D_Display ()
 	{
 		if (wipestart != nullptr) wipestart->DecRef();
 		wipestart = nullptr;
-		D_RenderSecondScreenMapFrame();
+		D_RenderSecondScreenMapFrame(viewsec, vp.TicFrac);
 		DrawOverlays();
 		End2DAndUpdate ();
 	}
