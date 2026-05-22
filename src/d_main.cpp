@@ -227,6 +227,14 @@ static std::vector<uint32_t> uzSecondScreenHudFrame;
 static int uzSecondScreenHudFrameWidth = 0;
 static int uzSecondScreenHudFrameHeight = 0;
 static bool uzSecondScreenHudFrameReady = false;
+// Set to true just before PerformWipe so D_RenderSecondScreenMapFrame triggers a melt on the next call.
+static bool sUzSecondScreenPendingMelt = false;
+// Persistent heap drawer for second-screen HUD — kept at file scope so D_Display can snapshot it.
+static F2DDrawer* sMapDrawer = nullptr;
+// Pixel snapshot of the last rendered second-screen HUD frame, captured just before PerformWipe.
+static std::vector<uint32_t> sWipeSnapshotPixels;
+static int sWipeSnapshotWidth  = 0;
+static int sWipeSnapshotHeight = 0;
 
 #if ANDROID
 static std::mutex uzSecondScreenHudSurfaceMutex;
@@ -453,15 +461,385 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 	if (uzSecondScreenHudActiveWindow == nullptr) { return; }
 #endif
 
+	// ---- Logo→HUD / wipe-triggered melt-wipe transition state (persists across calls) ----
+	static gamestate_t   sLogoLastState    = GS_STARTUP;
+	static FTextureID    sLogoTransitionTex;
+	static double        sMeltY[320]       = {};
+	static bool          sMeltActive       = false;
+	static uint64_t      sMeltLastTime     = 0;
+	// Melt start texture: logo (not owned) or captured HUD snapshot (owned via sMeltStartWrapTex).
+	static FGameTexture*    sMeltStartGameTex = nullptr;
+	static FWrapperTexture* sMeltStartWrapTex = nullptr; // non-null only for owned snapshot textures
+	// When true, melt end screen shows the logo (HUD→logo melt); false = live HUD (logo→HUD melt).
+	static bool             sMeltEndIsLogo    = false;
+
+	// Helper: clean up any owned melt-start texture and cancel the animation.
+	auto CancelMelt = [&]()
+	{
+		sMeltActive = false;
+		if (sMeltStartWrapTex != nullptr)
+		{
+			delete sMeltStartGameTex; // also frees sMeltStartWrapTex via RefCountedPtr
+			sMeltStartGameTex = nullptr;
+			sMeltStartWrapTex = nullptr;
+		}
+		sMeltStartGameTex = nullptr;
+	};
+
+	// Helper: initialise the melt column offsets (same as Wiper_Melt constructor).
+	auto InitMelt = [&]()
+	{
+		sMeltY[0] = -(double)(M_Random() & 15);
+		for (int i = 1; i < 320; i++)
+			sMeltY[i] = clamp(sMeltY[i-1] + (double)(M_Random() % 3) - 1., -15., 0.);
+		sMeltActive   = true;
+		sMeltLastTime = I_msTime();
+	};
+
+	if (sLogoLastState != gamestate)
+	{
+		if (sLogoLastState != GS_LEVEL && gamestate == GS_LEVEL)
+		{
+			// Entering a level from any non-level state: logo → HUD melt.
+			CancelMelt();
+			sMeltEndIsLogo = false; // end screen is the live HUD
+			if (sLogoTransitionTex.Exists())
+			{
+				sMeltStartGameTex = TexMan.GetGameTexture(sLogoTransitionTex); // not owned by us
+				InitMelt(); // logo strips slide down over the new HUD
+			}
+		}
+		else if (sLogoLastState == GS_LEVEL && gamestate != GS_LEVEL)
+		{
+			// Leaving a level: HUD → logo melt.
+			// The HUD snapshot was captured by D_Display (sWipeSnapshotPixels).
+			// sUzSecondScreenPendingMelt (below) will create the texture and start the melt.
+			CancelMelt();
+			sMeltEndIsLogo = true; // end screen will reveal the logo
+			// Clear stale level texture references — prevents use-after-free in Render2DToBuffer
+			// when the next level triggers a new snapshot capture.
+			if (sMapDrawer != nullptr) sMapDrawer->Clear();
+		}
+		sLogoLastState = gamestate;
+	}
+
+	// The main screen just ran PerformWipe (second screen was frozen).
+	// Start a melt so the new HUD appears smoothly — using the captured HUD snapshot as the start frame.
+	if (sUzSecondScreenPendingMelt)
+	{
+		sUzSecondScreenPendingMelt = false;
+		if (!sMeltActive)
+		{
+			// Clean up any previously owned snapshot texture.
+			// Note: delete FGameTexture also frees FWrapperTexture via RefCountedPtr<FTexture>.
+			if (sMeltStartWrapTex != nullptr)
+			{
+				delete sMeltStartGameTex; // also frees sMeltStartWrapTex via RefCountedPtr
+				sMeltStartGameTex = nullptr;
+				sMeltStartWrapTex = nullptr;
+			}
+			sMeltStartGameTex = nullptr;
+			// Create a texture from the captured HUD snapshot (if available).
+			if (sWipeSnapshotWidth > 0 && sWipeSnapshotHeight > 0 && !sWipeSnapshotPixels.empty())
+			{
+				sMeltStartWrapTex = new FWrapperTexture(sWipeSnapshotWidth, sWipeSnapshotHeight, 1);
+				sMeltStartWrapTex->GetSystemTexture()->CreateTexture(
+					reinterpret_cast<unsigned char*>(sWipeSnapshotPixels.data()),
+					sWipeSnapshotWidth, sWipeSnapshotHeight, 0, false, "WipeMeltStart");
+				sMeltStartGameTex = MakeGameTexture(sMeltStartWrapTex, nullptr, ETextureType::SWCanvas);
+				// Release the pixel buffer — texture is now on the GPU.
+				sWipeSnapshotPixels.clear();
+				sWipeSnapshotPixels.shrink_to_fit();
+				sWipeSnapshotWidth  = 0;
+				sWipeSnapshotHeight = 0;
+			}
+			// If no snapshot is available, sMeltStartGameTex stays nullptr → fallback to black strips.
+			InitMelt(); // strips slide down over the new HUD
+		}
+	}
+
+	// Title/demo screen: draw the main menu logo on the second display.
+	// Skip if a melt animation is in progress — the melt block below will handle rendering.
+	// Look up the first StaticPatch from the MainMenu descriptor (e.g. M_DOOM, M_STRIFE, M_HTIC).
+	// Falls back to the title page if the menu is not yet initialised.
+	if (gamestate == GS_DEMOSCREEN && !sMeltActive && screen != nullptr)
+	{
+		int srcW = uzSecondScreenHudRenderWidth;
+		int srcH = uzSecondScreenHudRenderHeight;
+#if ANDROID
+		if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
+		{
+			srcW = uzSecondScreenHudSurfaceWidth;
+			srcH = uzSecondScreenHudSurfaceHeight;
+		}
+#endif
+		if (srcW > 0 && srcH > 0)
+		{
+			// Find the logo: first ListMenuItemStaticPatch in the MainMenu descriptor.
+			FTextureID logoTex;
+			DMenuDescriptor** descPtr = MenuDescriptors.CheckKey(NAME_Mainmenu);
+			if (descPtr && *descPtr && (*descPtr)->IsKindOf(RUNTIME_CLASS(DListMenuDescriptor)))
+			{
+				DListMenuDescriptor* ld = static_cast<DListMenuDescriptor*>(*descPtr);
+				for (auto* item : ld->mItems)
+				{
+					if (item && item->GetClass()->IsDescendantOf("ListMenuItemStaticPatch"))
+					{
+						FTextureID tex = item->TextureIDVar("mTexture");
+						if (tex.Exists()) { logoTex = tex; break; }
+					}
+				}
+			}
+			// Fall back to title page if menu not yet initialised.
+			if (!logoTex.Exists())
+			{
+				extern FTextureID Page;
+				logoTex = Page;
+			}
+			// Cache for the slide-out transition.
+			sLogoTransitionTex = logoTex;
+			if (logoTex.Exists())
+			{
+				static F2DDrawer* sTitleDrawer = nullptr;
+				if (sTitleDrawer == nullptr) sTitleDrawer = new F2DDrawer();
+				F2DDrawer& titleDrawer = *sTitleDrawer;
+				titleDrawer.Clear();
+				F2DDrawer* const savedDrawer = twod;
+				titleDrawer.Begin(srcW, srcH);
+				titleDrawer.ClearClipRect();
+				titleDrawer.ClearTransform();
+				titleDrawer.SetOffset(DVector2(0.0, 0.0));
+				titleDrawer.SetScreenFade(1.f);
+				twod = &titleDrawer;
+				ClearRect(twod, 0, 0, srcW, srcH, 0, 0);
+				auto* gtex = TexMan.GetGameTexture(logoTex);
+				if (gtex)
+				{
+					const double texW  = gtex->GetDisplayWidth();
+					const double texH  = gtex->GetDisplayHeight();
+					const double scaleX = (double)srcW / texW;
+					const double scaleY = (double)srcH / texH;
+					const double scale  = scaleX < scaleY ? scaleX : scaleY;
+					const double drawW  = texW * scale;
+					const double drawH  = texH * scale;
+					const double drawX  = ((double)srcW - drawW) * 0.5;
+					const double drawY  = ((double)srcH - drawH) * 0.5;
+					DrawTexture(twod, gtex, drawX, drawY,
+						DTA_DestWidthF, drawW,
+						DTA_DestHeightF, drawH,
+						DTA_LeftOffset, 0,
+						DTA_TopOffset, 0,
+						DTA_Masked, false,
+						DTA_BilinearFilter, true,
+						TAG_DONE);
+				}
+				titleDrawer.End();
+				twod = savedDrawer;
+				screen->Render2DToSecondScreen(&titleDrawer, srcW, srcH);
+			}
+			return;
+		}
+	}
+
+	// Melt-wipe animation on the second screen.
+	if (sMeltActive && screen != nullptr)
+	{
+		int srcW = uzSecondScreenHudRenderWidth;
+		int srcH = uzSecondScreenHudRenderHeight;
+#if ANDROID
+		if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
+		{
+			srcW = uzSecondScreenHudSurfaceWidth;
+			srcH = uzSecondScreenHudSurfaceHeight;
+		}
+#endif
+		if (srcW > 0 && srcH > 0)
+		{
+			constexpr double kMeltHeight = 200.0; // virtual column height (same as Wiper_Melt::HEIGHT)
+			constexpr int    kMeltCols   = 320;   // virtual columns (same as Wiper_Melt::WIDTH)
+
+			// Advance melt state by elapsed ticks — 40 ticks/sec, matching PerformWipe.
+			const uint64_t now = I_msTime();
+			double ticks = (double)(now - sMeltLastTime) * 40.0 / 1000.0;
+			sMeltLastTime = now;
+
+			// Update column positions (mirrors Wiper_Melt::RunInterpolated physics).
+			while (ticks > 0.)
+			{
+				for (int i = 0; i < kMeltCols; i++)
+				{
+					if (sMeltY[i] < kMeltHeight)
+					{
+						if (ticks < 1.)
+						{
+							if      (sMeltY[i] < 0.)  sMeltY[i] += ticks;
+							else if (sMeltY[i] < 16.) sMeltY[i] += (sMeltY[i] + 1.) * ticks;
+							else                       sMeltY[i]  = min(sMeltY[i] + 8. * ticks, kMeltHeight);
+						}
+						else if (sMeltY[i] < 0.)  sMeltY[i] += 1.;
+						else if (sMeltY[i] < 16.) sMeltY[i] += sMeltY[i] + 1.;
+						else                       sMeltY[i]  = min(sMeltY[i] + 8., kMeltHeight);
+					}
+				}
+				ticks -= 1.;
+			}
+
+			// Check completion: all columns have fully slid off.
+			bool done = true;
+			for (int i = 0; i < kMeltCols; i++)
+				if (sMeltY[i] < kMeltHeight) { done = false; break; }
+
+			static F2DDrawer* sTransDrawer = nullptr;
+			if (sTransDrawer == nullptr) sTransDrawer = new F2DDrawer();
+			F2DDrawer& td = *sTransDrawer;
+			td.Clear();
+			F2DDrawer* const savedDrawer = twod;
+			td.Begin(srcW, srcH);
+			td.ClearClipRect();
+			td.ClearTransform();
+			td.SetOffset(DVector2(0.0, 0.0));
+			td.SetScreenFade(1.f);
+			twod = &td;
+
+			// End screen: render what will be revealed beneath the melting strips.
+			// If sMeltEndIsLogo (HUD→logo melt): draw the logo.
+			// Otherwise (logo→HUD melt): draw the live HUD/automap if ready, else black.
+			const bool hudReady = !sMeltEndIsLogo && uzSecondScreenHudApplied && StatusBar != nullptr &&
+			                      !hud_toggled && primaryLevel != nullptr &&
+			                      primaryLevel->automap != nullptr;
+			if (sMeltEndIsLogo)
+			{
+				// HUD→logo melt: reveal the logo beneath the sliding HUD strips.
+				ClearRect(twod, 0, 0, srcW, srcH, 0, 0);
+				if (sLogoTransitionTex.Exists())
+				{
+					auto* gtex = TexMan.GetGameTexture(sLogoTransitionTex);
+					if (gtex)
+					{
+						const double texW   = gtex->GetDisplayWidth();
+						const double texH   = gtex->GetDisplayHeight();
+						const double scaleX = (double)srcW / texW;
+						const double scaleY = (double)srcH / texH;
+						const double scale  = scaleX < scaleY ? scaleX : scaleY;
+						const double drawW  = texW * scale;
+						const double drawH  = texH * scale;
+						const double drawX  = ((double)srcW - drawW) * 0.5;
+						const double drawY  = ((double)srcH - drawH) * 0.5;
+						DrawTexture(twod, gtex, drawX, drawY,
+							DTA_DestWidthF,  drawW,
+							DTA_DestHeightF, drawH,
+							DTA_LeftOffset,  0,
+							DTA_TopOffset,   0,
+							DTA_Masked,      false,
+							DTA_BilinearFilter, true,
+							TAG_DONE);
+					}
+				}
+			}
+			else if (hudReady)
+			{
+				StatusBar->SetScale();
+				if (uzSecondScreenMapStartedLevel != primaryLevel ||
+				    uzSecondScreenMapStartedWidth  != srcW ||
+				    uzSecondScreenMapStartedHeight != srcH)
+				{
+					primaryLevel->automap->startDisplay();
+					uzSecondScreenMapStartedLevel  = primaryLevel;
+					uzSecondScreenMapStartedWidth  = srcW;
+					uzSecondScreenMapStartedHeight = srcH;
+				}
+				const bool savedAutomapActive = automapactive;
+				const bool savedViewActive    = viewactive;
+				automapactive = true;
+				viewactive    = false;
+				D_DrawLevelAutomapLayer(viewsec, ticFrac);
+				V_DrawBlend(viewsec);
+				automapactive = savedAutomapActive;
+				viewactive    = savedViewActive;
+			}
+			else
+			{
+				ClearRect(twod, 0, 0, srcW, srcH, 0, 0);
+			}
+
+			// Start screen strips sliding down over the new HUD.
+			if (sMeltStartGameTex != nullptr)
+			{
+				// Start-frame texture (logo or captured HUD snapshot) slides down column by column.
+				const double texW   = sMeltStartGameTex->GetDisplayWidth();
+				const double texH   = sMeltStartGameTex->GetDisplayHeight();
+				const double scaleX = (double)srcW / texW;
+				const double scaleY = (double)srcH / texH;
+				const double scale  = scaleX < scaleY ? scaleX : scaleY;
+				const double drawW  = texW * scale;
+				const double drawH  = texH * scale;
+				const double drawX  = ((double)srcW - drawW) * 0.5;
+				const double drawY  = ((double)srcH - drawH) * 0.5;
+				for (int i = 0; i < kMeltCols; i++)
+				{
+					const int    colLeft  = i       * srcW / kMeltCols;
+					const int    colRight = (i + 1) * srcW / kMeltCols;
+					const double dptY     = max(0., sMeltY[i] * (double)srcH / kMeltHeight);
+					// Black fill for the entire strip column so that bar areas (where
+					// the start texture doesn't reach) are opaque and don't let the
+					// end-screen bleed through.
+					if (dptY < (double)srcH)
+						ClearRect(twod, colLeft, (int)dptY, colRight, srcH, 0, 0);
+					DrawTexture(twod, sMeltStartGameTex, drawX, drawY + dptY,
+						DTA_DestWidthF,  drawW,
+						DTA_DestHeightF, drawH,
+						DTA_LeftOffset,  0,
+						DTA_TopOffset,   0,
+						DTA_ClipLeft,    colLeft,
+						DTA_ClipRight,   colRight,
+						DTA_ClipTop,     0,
+						DTA_ClipBottom,  srcH,
+						DTA_Masked,      false,
+						DTA_BilinearFilter, true,
+						TAG_DONE);
+				}
+			}
+			else
+			{
+				// Fallback: solid black strips slide down over the new HUD.
+				for (int i = 0; i < kMeltCols; i++)
+				{
+					const int    colLeft  = i       * srcW / kMeltCols;
+					const int    colRight = (i + 1) * srcW / kMeltCols;
+					const double dptY     = max(0., sMeltY[i] * (double)srcH / kMeltHeight);
+					if (dptY < (double)srcH)
+						ClearRect(twod, colLeft, (int)dptY, colRight, srcH, 0, 0);
+				}
+			}
+
+			td.End();
+			twod = savedDrawer;
+			if (hudReady) StatusBar->SetScale();
+			screen->Render2DToSecondScreen(&td, srcW, srcH);
+			if (done)
+			{
+				sMeltActive = false;
+				sMeltEndIsLogo = false;
+				// Release owned snapshot texture. RefCountedPtr<FTexture> in FGameTexture
+				// automatically frees the underlying FWrapperTexture via DecRef().
+				if (sMeltStartWrapTex != nullptr)
+				{
+					delete sMeltStartGameTex; // also frees sMeltStartWrapTex via RefCountedPtr
+					sMeltStartWrapTex = nullptr;
+				}
+				sMeltStartGameTex = nullptr;
+			}
+			return;
+		}
+	}
+
 	if (!uzSecondScreenHudApplied || StatusBar == nullptr || screen == nullptr || hud_toggled || gamestate != GS_LEVEL ||
 		primaryLevel == nullptr || primaryLevel->automap == nullptr)
 	{
 		return;
 	}
 
-	// Persistent heap drawer — avoids uninitialised stack fields (offset, Width/Height)
-	// that caused per-frame flicker at large surface dimensions.
-	static F2DDrawer* sMapDrawer = nullptr;
+	// sMapDrawer is file-scope; initialise lazily on first call.
 	if (sMapDrawer == nullptr) sMapDrawer = new F2DDrawer();
 	F2DDrawer& mapDrawer = *sMapDrawer;
 	mapDrawer.Clear();
@@ -1520,6 +1898,37 @@ void D_Display ()
 	else
 	{
 		NetUpdate();		// send out any new accumulation
+		// Capture the current second-screen HUD frame as the melt start texture.
+		// This must happen BEFORE PerformWipe while old-level textures are still valid.
+		if (sMapDrawer != nullptr && uzSecondScreenHudActiveWindow != nullptr)
+		{
+			int snapW = uzSecondScreenHudRenderWidth;
+			int snapH = uzSecondScreenHudRenderHeight;
+#if ANDROID
+			if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
+			{
+				snapW = uzSecondScreenHudSurfaceWidth;
+				snapH = uzSecondScreenHudSurfaceHeight;
+			}
+#endif
+			if (snapW > 0 && snapH > 0 && screen != nullptr)
+			{
+				sWipeSnapshotPixels.resize(snapW * snapH);
+				if (screen->Render2DToBuffer(sMapDrawer, snapW, snapH, sWipeSnapshotPixels.data()))
+				{
+					sWipeSnapshotWidth  = snapW;
+					sWipeSnapshotHeight = snapH;
+				}
+				else
+				{
+					// Capture failed — clear so melt falls back to black strips.
+					sWipeSnapshotPixels.clear();
+					sWipeSnapshotWidth  = 0;
+					sWipeSnapshotHeight = 0;
+				}
+			}
+		}
+		sUzSecondScreenPendingMelt = true; // second screen was frozen during wipe; trigger melt on next render
 		PerformWipe(wipestart, screen->WipeEndScreen(), wipe_type, false, DrawOverlays);
 	}
 	cycles.Unclock();
