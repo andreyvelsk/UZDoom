@@ -141,6 +141,7 @@ EXTERN_CVAR(Bool, cl_customizeinvulmap)
 EXTERN_CVAR(Bool, log_vgafont)
 EXTERN_CVAR(Bool, dlg_vgafont)
 CVAR(Int, vid_renderer, 1, 0)	// for some stupid mods which threw caution out of the window...
+CVAR(Float, am_secondscreen_map_zoom, 4.0f, CVAR_ARCHIVE)	// initial zoom level for second-screen automap (1.0 = whole map, 2.0 = 2x)
 
 void DrawHUD();
 void D_DoAnonStats();
@@ -748,6 +749,7 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 					uzSecondScreenMapStartedWidth  = srcW;
 					uzSecondScreenMapStartedHeight = srcH;
 				}
+				primaryLevel->automap->SetZoomFactor((double)am_secondscreen_map_zoom);
 				const bool savedAutomapActive = automapactive;
 				const bool savedViewActive    = viewactive;
 				automapactive = true;
@@ -872,6 +874,8 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 		uzSecondScreenMapStartedWidth = mapSourceWidth;
 		uzSecondScreenMapStartedHeight = mapSourceHeight;
 	}
+	// Apply CVAR zoom every frame so changes take effect immediately.
+	primaryLevel->automap->SetZoomFactor((double)am_secondscreen_map_zoom);
 	automapactive = true;
 	viewactive = false;
 	D_DrawLevelAutomapLayer(viewsec, ticFrac);

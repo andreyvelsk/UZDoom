@@ -1386,6 +1386,9 @@ OptionMenu AutomapOptions protected
 	Slider "$AUTOMAPMNU_EMPTYSPACEMARGIN",		"am_emptyspacemargin", 0, 90, 5, 0
 
 	StaticText ""
+	Slider "Second screen zoom",			"am_secondscreen_map_zoom", 1.0, 8.0, 0.5, 1
+
+	StaticText ""
 	Option "$AUTOMAPMNU_MARKFONT",				"am_markfont", "MapMarkFont"
 	Option "$AUTOMAPMNU_MARKCOLOR",				"am_markcolor", "TextColors"
 }

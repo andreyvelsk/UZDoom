@@ -54,6 +54,11 @@ public:
 	virtual DVector2 GetPosition() = 0;
 	virtual void startDisplay() = 0;
 
+	// Set the initial zoom as a multiple of min_scale_mtof.
+	// 1.0 = whole map visible, 2.0 = 2x zoom, etc.
+	// Default empty implementation is safe for any subclass.
+	virtual void SetZoomFactor(double factor) {}
+
 };
 
 void AM_StaticInit();

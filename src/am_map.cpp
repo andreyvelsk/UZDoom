@@ -1067,6 +1067,7 @@ public:
 	bool clearMarks() override;
 	DVector2 GetPosition() override;
 	void startDisplay() override;
+	void SetZoomFactor(double factor) override;
 
 };
 
@@ -1402,6 +1403,22 @@ void DAutomap::LevelInit ()
 // set the window scale to the maximum size
 //
 //=============================================================================
+
+void DAutomap::SetZoomFactor(double factor)
+{
+	if (min_scale_mtof <= 0) return; // guard: LevelInit not yet called
+	scale_mtof = clamp(min_scale_mtof * factor, min_scale_mtof, max_scale_mtof);
+	scale_ftom = 1.0 / scale_mtof;
+	// Update the viewport window dimensions to match the new scale.
+	// f_w/f_h are valid after the first Drawer() call; use twod as fallback.
+	if (f_w > 0 && f_h > 0)
+		activateNewScale();
+	else if (twod)
+	{
+		m_w = FTOM(twod->GetWidth());
+		m_h = FTOM(twod->GetHeight());
+	}
+}
 
 void DAutomap::minOutWindowScale ()
 {
