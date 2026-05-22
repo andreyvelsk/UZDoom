@@ -497,6 +497,9 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 	automapactive = true;
 	viewactive = false;
 	D_DrawLevelAutomapLayer(viewsec, ticFrac);
+	// Draw the damage/pain/pickup blend on top of the automap and HUD,
+	// so it is visible on the second screen at the same intensity as the main screen.
+	V_DrawBlend(viewsec);
 	mapDrawer.End();
 	automapactive = savedAutomapActive;
 	viewactive = savedViewActive;
