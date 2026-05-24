@@ -507,8 +507,10 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 			if (sLogoTransitionTex.Exists())
 			{
 				sMeltStartGameTex = TexMan.GetGameTexture(sLogoTransitionTex); // not owned by us
-				InitMelt(); // logo strips slide down over the new HUD
 			}
+			// Always start the melt: if no logo texture, use black strips as fallback
+			// so the HUD never appears abruptly (e.g. when entering the very first level).
+			InitMelt();
 		}
 		else if (sLogoLastState == GS_LEVEL && gamestate != GS_LEVEL)
 		{
@@ -529,7 +531,13 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 	if (sUzSecondScreenPendingMelt)
 	{
 		sUzSecondScreenPendingMelt = false;
-		if (!sMeltActive)
+		// Fire the snapshot melt only when it makes sense:
+		//  - sMeltEndIsLogo: leaving a level (HUD→logo transition); snapshot was a live HUD frame.
+		//  - gamestate==GS_LEVEL/TITLELEVEL: entering or within a level (logo→HUD transition).
+		// For non-level → non-level wipes (e.g. intermission → title screen) we must NOT fire here
+		// because sMeltEndIsLogo is false and primaryLevel->automap still points at the OLD level —
+		// that would cause the stale level map to appear as the melt "end frame".
+		if (!sMeltActive && (sMeltEndIsLogo || gamestate == GS_LEVEL || gamestate == GS_TITLELEVEL))
 		{
 			// Clean up any previously owned snapshot texture.
 			// Note: delete FGameTexture also frees FWrapperTexture via RefCountedPtr<FTexture>.
@@ -559,11 +567,12 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 		}
 	}
 
-	// Title/demo screen: draw the main menu logo on the second display.
-	// Skip if a melt animation is in progress — the melt block below will handle rendering.
-	// Look up the first StaticPatch from the MainMenu descriptor (e.g. M_DOOM, M_STRIFE, M_HTIC).
-	// Falls back to the title page if the menu is not yet initialised.
-	if (gamestate == GS_DEMOSCREEN && !sMeltActive && screen != nullptr)
+	// Non-level screen: draw the main menu logo on the second display.
+	// This covers GS_DEMOSCREEN, GS_INTERMISSION, GS_FULLCONSOLE, loading states, etc.
+	// Without this, the second screen goes black between the HUD→logo melt completing and
+	// the next GS_DEMOSCREEN state (e.g. during the intermission screen after level end).
+	// Skip if a melt animation is in progress — the melt block below handles rendering then.
+	if (gamestate != GS_LEVEL && gamestate != GS_TITLELEVEL && !sMeltActive && screen != nullptr)
 	{
 		int srcW = uzSecondScreenHudRenderWidth;
 		int srcH = uzSecondScreenHudRenderHeight;
@@ -705,7 +714,8 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 			// End screen: render what will be revealed beneath the melting strips.
 			// If sMeltEndIsLogo (HUD→logo melt): draw the logo.
 			// Otherwise (logo→HUD melt): draw the live HUD/automap if ready, else black.
-			const bool hudReady = !sMeltEndIsLogo && uzSecondScreenHudApplied && StatusBar != nullptr &&
+			const bool hudReady = !sMeltEndIsLogo && gamestate == GS_LEVEL &&
+			                      uzSecondScreenHudApplied && StatusBar != nullptr &&
 			                      !hud_toggled && primaryLevel != nullptr &&
 			                      primaryLevel->automap != nullptr;
 			if (sMeltEndIsLogo)

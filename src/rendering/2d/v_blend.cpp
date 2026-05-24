@@ -370,6 +370,7 @@ FVector4 V_CalcBlend(sector_t* viewsector, PalEntry* modulateColor)
 
 void V_DrawBlend(sector_t* viewsector)
 {
+	if (viewsector == nullptr) return;
 	auto drawer = twod;
 	PalEntry modulateColor;
 	auto blend = V_CalcBlend(viewsector, &modulateColor);
