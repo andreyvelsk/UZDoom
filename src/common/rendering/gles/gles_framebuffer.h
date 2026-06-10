@@ -41,6 +41,9 @@ public:
 	bool Render2DToBuffer(F2DDrawer* drawer, int width, int height, uint32_t* buffer) override;
 	void SetSecondScreenNativeWindow(void* nativeWindow, int width, int height) override;
 	bool Render2DToSecondScreen(F2DDrawer* drawer, int width, int height) override;
+	bool Render2DToMainScreen(F2DDrawer* drawer, int width, int height) override;
+	bool PresentGameFrameToSecondScreen() override;
+	void SetSecondScreenSwapActive(bool active) override;
 	bool FlipSavePic() const override { return true; }
 
 	FRenderState* RenderState() override;
@@ -82,6 +85,9 @@ public:
 	int SecondScreenSurfaceWidth = 0;
 	int SecondScreenSurfaceHeight = 0;
 #endif
+
+	// When true, Update() presents the game frame to the secondary display (screen swap).
+	bool SecondScreenSwapActive = false;
 
 	int camtexcount = 0;
 };

@@ -184,10 +184,28 @@ void OpenGLFrameBuffer::Update()
 	Flush3D.Reset();
 
 	Flush3D.Clock();
-	GLRenderer->Flush();
+	bool presentedToSecondScreen = false;
+#if ANDROID
+	// Screen-swap mode: present the freshly rendered game frame (3D scene + game HUD/
+	// menu/console in `twod`) to the secondary display instead of the main SDL surface.
+	// The main surface is driven separately by the automap/logo stream. This path also
+	// transparently covers the engine's blocking wipe loop (PerformWipe), so wipes melt
+	// on the secondary screen, matching where the game itself is shown.
+	if (SecondScreenSwapActive && SecondScreenNativeWindow != nullptr)
+	{
+		presentedToSecondScreen = PresentGameFrameToSecondScreen();
+	}
+#endif
+	if (!presentedToSecondScreen)
+	{
+		GLRenderer->Flush();
+	}
 	Flush3D.Unclock();
 
-	Swap();
+	if (!presentedToSecondScreen)
+	{
+		Swap();
+	}
 	Super::Update();
 }
 
@@ -471,6 +489,186 @@ bool OpenGLFrameBuffer::Render2DToSecondScreen(F2DDrawer* drawer, int width, int
 
 	return swapped;
 }
+
+bool OpenGLFrameBuffer::PresentGameFrameToSecondScreen()
+{
+	// Presents the 3D scene that was just rendered into mBuffers to the secondary
+	// display surface, reusing the exact same present pipeline (DrawPresentTexture)
+	// used for the main screen. The pending 2D layer in `twod` (game HUD/overlays)
+	// is composited into the scene first, so the secondary screen receives the
+	// complete game frame.
+	if (GLRenderer == nullptr || SecondScreenNativeWindow == nullptr)
+	{
+		return false;
+	}
+
+	EGLDisplay display = eglGetCurrentDisplay();
+	EGLContext context = eglGetCurrentContext();
+	if (!EnsureSecondScreenSurface(display, context))
+	{
+		return false;
+	}
+
+	EGLSurface previousDrawSurface = eglGetCurrentSurface(EGL_DRAW);
+	EGLSurface previousReadSurface = eglGetCurrentSurface(EGL_READ);
+	GLint previousFramebuffer = 0;
+	GLint previousViewport[4] = { 0, 0, 0, 0 };
+	GLint previousScissor[4] = { 0, 0, 0, 0 };
+	GLfloat previousClearColor[4] = { 0.f, 0.f, 0.f, 0.f };
+	GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+	glGetIntegerv(GL_VIEWPORT, previousViewport);
+	glGetIntegerv(GL_SCISSOR_BOX, previousScissor);
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, previousClearColor);
+
+	if (!eglMakeCurrent(display, SecondScreenEglSurface, SecondScreenEglSurface, context))
+	{
+		return false;
+	}
+
+	// Clear the whole secondary surface to black so the letterbox bars around the
+	// aspect-fit game frame are opaque (CopyToBackbuffer skips ClearBorders when a
+	// bounds rectangle is supplied).
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, SecondScreenSurfaceWidth, SecondScreenSurfaceHeight);
+	glDisable(GL_SCISSOR_TEST);
+	glClearColor(0.f, 0.f, 0.f, 1.f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	// Aspect-fill (cover) the rendered scene into the secondary surface: scale so the
+	// game frame covers the whole surface without distorting its proportions. The
+	// overflowing axis is cropped symmetrically by the viewport/framebuffer, so the
+	// game fills the screen edge to edge with no black bars.
+	const int frameWidth = screen->mScreenViewport.width;
+	const int frameHeight = screen->mScreenViewport.height;
+	IntRect box;
+	if (frameWidth > 0 && frameHeight > 0)
+	{
+		const float frameAspect = float(frameWidth) / float(frameHeight);
+		const float surfaceAspect = float(SecondScreenSurfaceWidth) / float(SecondScreenSurfaceHeight);
+		int destinationWidth;
+		int destinationHeight;
+		if (frameAspect > surfaceAspect)
+		{
+			// Frame is wider than the surface: match heights, crop the sides.
+			destinationHeight = SecondScreenSurfaceHeight;
+			destinationWidth = int(float(destinationHeight) * frameAspect + 0.5f);
+		}
+		else
+		{
+			// Frame is taller than the surface: match widths, crop top/bottom.
+			destinationWidth = SecondScreenSurfaceWidth;
+			destinationHeight = int(float(destinationWidth) / frameAspect + 0.5f);
+		}
+		box.left = (SecondScreenSurfaceWidth - destinationWidth) / 2;
+		box.top = (SecondScreenSurfaceHeight - destinationHeight) / 2;
+		box.width = destinationWidth;
+		box.height = destinationHeight;
+	}
+	else
+	{
+		box.left = 0;
+		box.top = 0;
+		box.width = SecondScreenSurfaceWidth;
+		box.height = SecondScreenSurfaceHeight;
+	}
+
+	// Composite the pending 2D layer into the scene buffer and present it to the
+	// secondary surface's default framebuffer (FBO 0), which is now current.
+	GLRenderer->CopyToBackbuffer(&box, true);
+	glFlush();
+	const EGLBoolean swapResult = eglSwapBuffers(display, SecondScreenEglSurface);
+	const bool swapped = swapResult == EGL_TRUE;
+
+	eglMakeCurrent(display, previousDrawSurface, previousReadSurface, context);
+	glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
+	glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+	glScissor(previousScissor[0], previousScissor[1], previousScissor[2], previousScissor[3]);
+	if (scissorWasEnabled)
+	{
+		glEnable(GL_SCISSOR_TEST);
+	}
+	else
+	{
+		glDisable(GL_SCISSOR_TEST);
+	}
+	glClearColor(previousClearColor[0], previousClearColor[1], previousClearColor[2], previousClearColor[3]);
+	gl_RenderState.ClearLastMaterial();
+
+	if (!swapped)
+	{
+		DestroySecondScreenSurface();
+	}
+
+	return swapped;
+}
+
+bool OpenGLFrameBuffer::Render2DToMainScreen(F2DDrawer* drawer, int width, int height)
+{
+	// Presents a 2D drawer (the automap/logo stream) to the main SDL display, swapping
+	// it. Used by screen-swap mode: the main surface is already current, so we simply
+	// draw into its default framebuffer (FBO 0) and swap via the normal SDL path.
+	if (GLRenderer == nullptr || drawer == nullptr || width <= 0 || height <= 0)
+	{
+		return false;
+	}
+
+	const int targetWidth = GetWidth();
+	const int targetHeight = GetHeight();
+	if (targetWidth <= 0 || targetHeight <= 0)
+	{
+		return false;
+	}
+
+	GLint previousFramebuffer = 0;
+	GLint previousViewport[4] = { 0, 0, 0, 0 };
+	GLint previousScissor[4] = { 0, 0, 0, 0 };
+	GLfloat previousClearColor[4] = { 0.f, 0.f, 0.f, 0.f };
+	GLboolean scissorWasEnabled = glIsEnabled(GL_SCISSOR_TEST);
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+	glGetIntegerv(GL_VIEWPORT, previousViewport);
+	glGetIntegerv(GL_SCISSOR_BOX, previousScissor);
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, previousClearColor);
+
+	// Aspect-fit the drawer into the main screen. The map/logo drawer is normally built
+	// at the main screen's dimensions, so this resolves to a 1:1 full-screen fill.
+	const float frameAspect = float(width) / float(height);
+	int destinationWidth = targetWidth;
+	int destinationHeight = int(float(destinationWidth) / frameAspect + 0.5f);
+	if (destinationHeight > targetHeight)
+	{
+		destinationHeight = targetHeight;
+		destinationWidth = int(float(destinationHeight) * frameAspect + 0.5f);
+	}
+	const int destinationX = (targetWidth - destinationWidth) / 2;
+	const int destinationY = (targetHeight - destinationHeight) / 2;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, targetWidth, targetHeight);
+	glDisable(GL_SCISSOR_TEST);
+	glClearColor(0.f, 0.f, 0.f, 1.f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	::Draw2D(drawer, gl_RenderState, destinationX, destinationY, destinationWidth, destinationHeight);
+	glFlush();
+	SwapBuffers();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
+	glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+	glScissor(previousScissor[0], previousScissor[1], previousScissor[2], previousScissor[3]);
+	if (scissorWasEnabled)
+	{
+		glEnable(GL_SCISSOR_TEST);
+	}
+	else
+	{
+		glDisable(GL_SCISSOR_TEST);
+	}
+	glClearColor(previousClearColor[0], previousClearColor[1], previousClearColor[2], previousClearColor[3]);
+	gl_RenderState.ClearLastMaterial();
+
+	return true;
+}
 #else
 void OpenGLFrameBuffer::SetSecondScreenNativeWindow(void* nativeWindow, int width, int height)
 {
@@ -480,7 +678,23 @@ bool OpenGLFrameBuffer::Render2DToSecondScreen(F2DDrawer* drawer, int width, int
 {
 	return false;
 }
+
+bool OpenGLFrameBuffer::PresentGameFrameToSecondScreen()
+{
+	return false;
+}
+
+bool OpenGLFrameBuffer::Render2DToMainScreen(F2DDrawer* drawer, int width, int height)
+{
+	return false;
+}
 #endif
+
+void OpenGLFrameBuffer::SetSecondScreenSwapActive(bool active)
+{
+	SecondScreenSwapActive = active;
+}
+
 
 //===========================================================================
 //

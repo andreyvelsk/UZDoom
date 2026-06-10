@@ -266,6 +266,17 @@ public:
 	virtual bool Render2DToBuffer(F2DDrawer* drawer, int width, int height, uint32_t* buffer) { return false; }
 	virtual void SetSecondScreenNativeWindow(void* nativeWindow, int width, int height) {}
 	virtual bool Render2DToSecondScreen(F2DDrawer* drawer, int width, int height) { return false; }
+	// Presents a 2D drawer to the main (primary/SDL) display, swapping it. Used by the
+	// screen-swap mode so the automap/logo stream can be shown on the main screen while
+	// the game frame is redirected to the secondary display.
+	virtual bool Render2DToMainScreen(F2DDrawer* drawer, int width, int height) { return false; }
+	// When enabled, the next Update() presents the rendered game frame to the secondary
+	// display instead of the main one (used by screen-swap mode, also covers wipes).
+	virtual void SetSecondScreenSwapActive(bool active) {}
+	// Presents the current 3D scene frame (the one just rendered into the scene buffer)
+	// to the secondary screen surface. Used by the "swap screens" feature so the game
+	// renders on the secondary display while the main display shows the automap.
+	virtual bool PresentGameFrameToSecondScreen() { return false; }
 	virtual void SetActiveRenderTarget() {}
 
 	// Screen wiping

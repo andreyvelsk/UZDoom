@@ -216,6 +216,11 @@ bool engineInitialized = false;
 #endif
 
 static std::atomic_bool uzSecondScreenHudRequested { false };
+// When true the user asked to swap the main and the second screen. The flag is set
+// from Java before the second screen is enabled. It is safe to toggle even when no
+// second screen is present: nothing reads it unless an active second-screen surface
+// exists, so it never affects the single-screen startup path.
+static std::atomic_bool uzSecondScreenSwapRequested { false };
 static bool uzSecondScreenHudApplied = false;
 static int uzSecondScreenSavedScreenBlocks = 10;
 static constexpr int uzSecondScreenHudRenderWidth = 320;
@@ -303,12 +308,18 @@ static void D_UpdateSecondScreenHudSurface()
 static void D_UpdateSecondScreenHudMode()
 {
 	const bool requested = uzSecondScreenHudRequested.load(std::memory_order_relaxed);
-	if (requested == uzSecondScreenHudApplied)
+	const bool swap = uzSecondScreenSwapRequested.load(std::memory_order_relaxed);
+	// When swapping screens, the game (with its normal statusbar HUD) is shown on the
+	// secondary display, so we must NOT force the wide screenblocks=12 view that hides
+	// the statusbar. The forced fullscreen view is only used for the non-swap HUD mode
+	// where the statusbar/automap live on the secondary screen instead.
+	const bool wantForcedView = requested && !swap;
+	if (wantForcedView == uzSecondScreenHudApplied)
 	{
 		return;
 	}
 
-	if (requested)
+	if (wantForcedView)
 	{
 		uzSecondScreenSavedScreenBlocks = screenblocks;
 		screenblocks = 12;
@@ -321,6 +332,12 @@ static void D_UpdateSecondScreenHudMode()
 		R_SetViewSize(screenblocks);
 		uzSecondScreenHudApplied = false;
 	}
+}
+
+extern "C" __attribute__((used)) __attribute__((visibility("default")))
+void SetSecondScreenSwapEnabled(const bool enabled)
+{
+	uzSecondScreenSwapRequested.store(enabled, std::memory_order_relaxed);
 }
 
 extern "C" __attribute__((used)) __attribute__((visibility("default")))
@@ -446,6 +463,42 @@ const char* GetSecondScreenHudState()
 }
 
 static void D_DrawLevelAutomapLayer(sector_t* viewsec, double ticFrac);
+static bool D_IsSecondScreenSwapActive();
+
+// Computes the render dimensions for the second-screen content stream (automap/logo/melt).
+// In screen-swap mode the content is shown on the MAIN display, so it uses the main screen's
+// dimensions; otherwise it uses the secondary surface's dimensions.
+static void D_GetSecondScreenContentDims(int& w, int& h)
+{
+	if (D_IsSecondScreenSwapActive() && screen != nullptr)
+	{
+		w = screen->GetWidth();
+		h = screen->GetHeight();
+		return;
+	}
+	w = uzSecondScreenHudRenderWidth;
+	h = uzSecondScreenHudRenderHeight;
+#if ANDROID
+	if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
+	{
+		w = uzSecondScreenHudSurfaceWidth;
+		h = uzSecondScreenHudSurfaceHeight;
+	}
+#endif
+}
+
+// Presents the second-screen content stream. In screen-swap mode it goes to the MAIN
+// display (the game frame is redirected to the secondary by OpenGLFrameBuffer::Update);
+// otherwise it goes to the secondary display as usual.
+static bool D_PresentSecondScreenContent(F2DDrawer* drawer, int w, int h)
+{
+	if (screen == nullptr) { return false; }
+	if (D_IsSecondScreenSwapActive())
+	{
+		return screen->Render2DToMainScreen(drawer, w, h);
+	}
+	return screen->Render2DToSecondScreen(drawer, w, h);
+}
 
 static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 {
@@ -461,6 +514,10 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 	}
 	if (uzSecondScreenHudActiveWindow == nullptr) { return; }
 #endif
+
+	// In screen-swap mode this content stream is shown on the MAIN display instead of the
+	// secondary one (the game frame is redirected to the secondary by Update()).
+	const bool swapActive = D_IsSecondScreenSwapActive();
 
 	// ---- Logo→HUD / wipe-triggered melt-wipe transition state (persists across calls) ----
 	static gamestate_t   sLogoLastState    = GS_STARTUP;
@@ -574,15 +631,9 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 	// Skip if a melt animation is in progress — the melt block below handles rendering then.
 	if (gamestate != GS_LEVEL && gamestate != GS_TITLELEVEL && !sMeltActive && screen != nullptr)
 	{
-		int srcW = uzSecondScreenHudRenderWidth;
-		int srcH = uzSecondScreenHudRenderHeight;
-#if ANDROID
-		if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
-		{
-			srcW = uzSecondScreenHudSurfaceWidth;
-			srcH = uzSecondScreenHudSurfaceHeight;
-		}
-#endif
+		int srcW = 0;
+		int srcH = 0;
+		D_GetSecondScreenContentDims(srcW, srcH);
 		if (srcW > 0 && srcH > 0)
 		{
 			// Find the logo: first ListMenuItemStaticPatch in the MainMenu descriptor.
@@ -645,7 +696,7 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 				}
 				titleDrawer.End();
 				twod = savedDrawer;
-				screen->Render2DToSecondScreen(&titleDrawer, srcW, srcH);
+				D_PresentSecondScreenContent(&titleDrawer, srcW, srcH);
 			}
 			return;
 		}
@@ -654,15 +705,9 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 	// Melt-wipe animation on the second screen.
 	if (sMeltActive && screen != nullptr)
 	{
-		int srcW = uzSecondScreenHudRenderWidth;
-		int srcH = uzSecondScreenHudRenderHeight;
-#if ANDROID
-		if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
-		{
-			srcW = uzSecondScreenHudSurfaceWidth;
-			srcH = uzSecondScreenHudSurfaceHeight;
-		}
-#endif
+		int srcW = 0;
+		int srcH = 0;
+		D_GetSecondScreenContentDims(srcW, srcH);
 		if (srcW > 0 && srcH > 0)
 		{
 			constexpr double kMeltHeight = 200.0; // virtual column height (same as Wiper_Melt::HEIGHT)
@@ -715,7 +760,7 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 			// If sMeltEndIsLogo (HUD→logo melt): draw the logo.
 			// Otherwise (logo→HUD melt): draw the live HUD/automap if ready, else black.
 			const bool hudReady = !sMeltEndIsLogo && gamestate == GS_LEVEL &&
-			                      uzSecondScreenHudApplied && StatusBar != nullptr &&
+			                      (uzSecondScreenHudApplied || swapActive) && StatusBar != nullptr &&
 			                      !hud_toggled && primaryLevel != nullptr &&
 			                      primaryLevel->automap != nullptr;
 			if (sMeltEndIsLogo)
@@ -827,7 +872,7 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 			td.End();
 			twod = savedDrawer;
 			if (hudReady) StatusBar->SetScale();
-			screen->Render2DToSecondScreen(&td, srcW, srcH);
+			D_PresentSecondScreenContent(&td, srcW, srcH);
 			if (done)
 			{
 				sMeltActive = false;
@@ -845,7 +890,7 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 		}
 	}
 
-	if (!uzSecondScreenHudApplied || StatusBar == nullptr || screen == nullptr || hud_toggled || gamestate != GS_LEVEL ||
+	if ((!uzSecondScreenHudApplied && !swapActive) || StatusBar == nullptr || screen == nullptr || hud_toggled || gamestate != GS_LEVEL ||
 		primaryLevel == nullptr || primaryLevel->automap == nullptr)
 	{
 		return;
@@ -858,15 +903,9 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 	F2DDrawer* savedDrawer = twod;
 	const bool savedAutomapActive = automapactive;
 	const bool savedViewActive = viewactive;
-	int mapSourceWidth = uzSecondScreenHudRenderWidth;
-	int mapSourceHeight = uzSecondScreenHudRenderHeight;
-#if ANDROID
-	if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
-	{
-		mapSourceWidth = uzSecondScreenHudSurfaceWidth;
-		mapSourceHeight = uzSecondScreenHudSurfaceHeight;
-	}
-#endif
+	int mapSourceWidth = 0;
+	int mapSourceHeight = 0;
+	D_GetSecondScreenContentDims(mapSourceWidth, mapSourceHeight);
 	if (mapSourceWidth <= 0 || mapSourceHeight <= 0) { return; }
 	mapDrawer.Begin(mapSourceWidth, mapSourceHeight);
 	mapDrawer.ClearClipRect();
@@ -899,7 +938,7 @@ static void D_RenderSecondScreenMapFrame(sector_t* viewsec, double ticFrac)
 	twod = savedDrawer;
 	StatusBar->SetScale();
 
-	if (screen->Render2DToSecondScreen(&mapDrawer, mapSourceWidth, mapSourceHeight))
+	if (D_PresentSecondScreenContent(&mapDrawer, mapSourceWidth, mapSourceHeight))
 	{
 		return;
 	}
@@ -1687,6 +1726,28 @@ static void End2DAndUpdate()
 
 //==========================================================================
 //
+// Second-screen swap support
+//
+// When the user enables "swap screens", the 3D game is presented on the
+// secondary display while the main display shows the fullscreen automap.
+// Everything here is gated so that, without an active secondary surface or
+// without the swap flag, behaviour is identical to the normal path.
+//
+//==========================================================================
+
+static bool D_IsSecondScreenSwapActive()
+{
+	if (!uzSecondScreenSwapRequested.load(std::memory_order_relaxed)) return false;
+	if (!uzSecondScreenHudRequested.load(std::memory_order_relaxed)) return false;
+#if ANDROID
+	return uzSecondScreenHudActiveWindow != nullptr;
+#else
+	return false;
+#endif
+}
+
+//==========================================================================
+//
 // D_Display
 //
 // Draw current display, possibly wiping it from the previous
@@ -1754,7 +1815,7 @@ void D_Display ()
 	}
 	}
 
-	// [RH] Allow temporarily disabling wipes
+	// [RH] Allow temporarily disabling wipes.
 	if (NoWipe || !CanWipe())
 	{
 		if (NoWipe > 0) NoWipe--;
@@ -1800,6 +1861,13 @@ void D_Display ()
 	TexAnim.UpdateAnimations(screen->FrameTime);
 	R_UpdateSky(screen->FrameTime);
 	D_UpdateSecondScreenHudMode();
+	// Tell the framebuffer whether to redirect the game frame to the secondary display
+	// this frame. This also covers the blocking wipe loop (PerformWipe) so wipes melt on
+	// the secondary screen alongside the game.
+	if (screen != nullptr)
+	{
+		screen->SetSecondScreenSwapActive(D_IsSecondScreenSwapActive());
+	}
 	screen->BeginFrame();
 	twod->ClearClipRect();
 	if ((gamestate == GS_LEVEL || gamestate == GS_TITLELEVEL) && gametic != 0)
@@ -1905,6 +1973,9 @@ void D_Display ()
 	{
 		if (wipestart != nullptr) wipestart->DecRef();
 		wipestart = nullptr;
+		// Render the second-screen content (automap/logo/melt). In screen-swap mode this
+		// targets the MAIN display, while End2DAndUpdate() redirects the game frame to the
+		// secondary display.
 		D_RenderSecondScreenMapFrame(viewsec, vp.TicFrac);
 		DrawOverlays();
 		End2DAndUpdate ();
@@ -1916,15 +1987,9 @@ void D_Display ()
 		// This must happen BEFORE PerformWipe while old-level textures are still valid.
 		if (sMapDrawer != nullptr && uzSecondScreenHudActiveWindow != nullptr)
 		{
-			int snapW = uzSecondScreenHudRenderWidth;
-			int snapH = uzSecondScreenHudRenderHeight;
-#if ANDROID
-			if (uzSecondScreenHudSurfaceWidth > 0 && uzSecondScreenHudSurfaceHeight > 0)
-			{
-				snapW = uzSecondScreenHudSurfaceWidth;
-				snapH = uzSecondScreenHudSurfaceHeight;
-			}
-#endif
+			int snapW = 0;
+			int snapH = 0;
+			D_GetSecondScreenContentDims(snapW, snapH);
 			if (snapW > 0 && snapH > 0 && screen != nullptr)
 			{
 				sWipeSnapshotPixels.resize(snapW * snapH);
